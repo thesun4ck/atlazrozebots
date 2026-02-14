@@ -1,0 +1,38 @@
+# Environment variables - САМОЕ ВАЖНОЕ!
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+dist/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Data files (YAML содержат заказы и личные данные!)
+data/carts.yaml
+data/orders.yaml
+data/users.yaml
+data/favorites.yaml
+
+# Можешь оставить эти в репозитории:
+# data/admins.yaml
+# data/bouquets.yaml
+
+# Images (если не хочешь пушить фото - можешь раскомментировать)
+images/
+
+# OS
+.DS_Store
+Thumbs.db
