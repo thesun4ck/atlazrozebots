@@ -491,7 +491,7 @@ async def payment_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Отправляем админу
     try:
         await context.bot.send_message(
-            "@thesun4ck",
+            ADMIN_ID,
             admin_msg,
             reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode='Markdown'
