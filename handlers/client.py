@@ -1,460 +1,625 @@
-from aiogram import Router, F, Bot
-from aiogram.types import Message, CallbackQuery, FSInputFile, InlineQuery, InlineQueryResultArticle, InputTextMessageContent
-from aiogram.filters import CommandStart
-from aiogram.fsm.context import FSMContext
-from aiogram.fsm.state import State, StatesGroup
-from aiogram.utils.keyboard import InlineKeyboardBuilder
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, ReplyKeyboardRemove
+from telegram.ext import ContextTypes, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ConversationHandler
+from database import db
+from config import CONTACT_USERNAME
+import logging
+from datetime import datetime, timedelta
 
-from database.db import (
-    get_bouquets, get_bouquet_by_id, get_favorites, toggle_favorite,
-    get_user_cart, add_to_cart, remove_from_cart, clear_cart,
-    create_order, get_user_orders, is_admin, ensure_user_exists
-)
-from keyboards.client_kb import (
-    get_main_menu, get_catalog_keyboard, get_catalog_navigation,
-    get_cart_item_keyboard, get_cart_summary_keyboard, get_order_item_keyboard
-)
+logger = logging.getLogger(__name__)
 
-router = Router()
+# States для ConversationHandler
+(CHOOSING_COLOR, CHOOSING_QUANTITY, CHOOSING_PACKAGING, 
+ CHOOSING_EXTRAS, CARD_TEXT, CHOOSING_DATE, CHOOSING_TIME,
+ CHOOSING_PICKUP, ENTERING_ADDRESS) = range(9)
 
-class BouquetConstructor(StatesGroup):
-    choosing_color = State()
-    choosing_quantity = State()
-    choosing_packaging = State()
-    choosing_extras = State()
-    entering_card_text = State()
-    choosing_date = State()
-    choosing_time = State()
-    choosing_pickup = State()
-    entering_address = State()
-    confirming = State()
+def get_main_menu():
+    """Главное меню"""
+    keyboard = [
+        ["🌹 Каталог", "🛒 Корзина"],
+        ["⭐️ Избранное", "📦 Мои заказы"],
+        ["ℹ️ Информация"]
+    ]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-@router.message(CommandStart())
-async def cmd_start(message: Message, state: FSMContext):
-    # Приветствие и создание записи пользователя
-    print(f"Start command from {message.from_user.id}")
-    user = message.from_user
-    await ensure_user_exists(user.id, user.username, user.first_name, user.last_name or "")
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /start"""
+    user = update.effective_user
+    db.save_user(user.id, user.username, user.first_name, user.last_name or "")
     
-    # Deep linking check
-    args = message.text.split()[1] if len(message.text.split()) > 1 else None
-    if args and args.startswith("bouquet_"):
-        bouquet_id = args.split("_")[1]
-        # Skip to details
-        await message.answer("Переход к букету...")
-        # Simulate callback logic or just show it
-        # Simplified: just show catalog item logic
-        return
-
-    await message.answer(
-        f"🌹 Добро пожаловать в <b>Flower Shop</b>!\n\n"
-        f"Мы создаем уникальные букеты из атласных роз ручной работы. "
-        f"Каждый букет - это произведение искусства!\n\n"
-        f"Выберите действие:",
+    await update.message.reply_text(
+        "🌹 *Добро пожаловать в Flower Shop!*\n\n"
+        "Мы создаем уникальные букеты из атласных роз ручной работы\\.\n"
+        "Каждый букет \\- это произведение искусства\\!\n\n"
+        "Выберите действие:",
         reply_markup=get_main_menu(),
-        parse_mode="HTML"
+        parse_mode='MarkdownV2'
     )
 
-@router.message(F.text == "🌹 Каталог")
-async def show_catalog(message: Message, state: FSMContext):
-    # Показать каталог букетов
-    print(f"Catalog requested by {message.from_user.id}")
-    bouquets = await get_bouquets()
+async def catalog(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показать каталог"""
+    bouquets = db.get_bouquets()
+    
     if not bouquets:
-        await message.answer("Каталог пуст.")
+        await update.message.reply_text("Каталог пуст")
         return
-
-    user_id = message.from_user.id
-    favorites = await get_favorites(user_id)
     
-    # Показываем постранично, тут упростим и покажем первые 5
-    page_size = 5
-    page = 0 
+    favorites = db.get_favorites(update.effective_user.id)
     
-    start = page * page_size
-    end = start + page_size
-    
-    for bouquet in bouquets[start:end]:
-        is_favorite = bouquet['id'] in favorites
+    for bouquet in bouquets:
+        is_fav = bouquet['id'] in favorites
         caption = (
-            f"{'🔥 ' if bouquet.get('is_popular') else ''}<b>{bouquet['name']}</b>\n\n"
+            f"{'🔥 ' if bouquet.get('is_popular') else ''}"
+            f"*{bouquet['name']}*\n\n"
             f"{bouquet['description']}\n\n"
-            f"💰 Цена от: <b>{bouquet['base_price']}₽</b>"
+            f"💰 Цена от: *{bouquet['base_price']}₽*"
         )
+        
+        keyboard = [
+            [
+                InlineKeyboardButton("🛒 Заказать", callback_data=f"order:{bouquet['id']}"),
+                InlineKeyboardButton("❤️" if is_fav else "♡", callback_data=f"fav:{bouquet['id']}")
+            ]
+        ]
+        
         try:
-            photo = FSInputFile(bouquet['image_path'])
-            await message.answer_photo(
-                photo=photo,
-                caption=caption,
-                reply_markup=get_catalog_keyboard(bouquet['id'], is_favorite),
-                parse_mode="HTML"
-            )
+            with open(bouquet['image_path'], 'rb') as photo:
+                await update.message.reply_photo(
+                    photo=photo,
+                    caption=caption,
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode='Markdown'
+                )
         except Exception as e:
-            await message.answer(f"Ошибка загрузки фото: {e}\n\n{caption}")
-    
-    # Навигация (упрощенная)
-    if len(bouquets) > page_size:
-        await message.answer(
-            "Навигация:", 
-            reply_markup=get_catalog_navigation(page, len(bouquets) > end)
-        )
+            logger.error(f"Photo error: {e}")
+            await update.message.reply_text(caption, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
 
-@router.callback_query(F.data.startswith("details:"))
-async def bouquet_details(callback: CallbackQuery, state: FSMContext):
-    # Начинаем процесс заказа (конструктор)
-    bouquet_id = callback.data.split(":")[1]
-    bouquet = await get_bouquet_by_id(bouquet_id)
+async def start_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Начать заказ"""
+    query = update.callback_query
+    await query.answer()
     
-    await state.update_data(bouquet_id=bouquet_id, bouquet_name=bouquet['name'], base_price=bouquet['base_price'])
+    bouquet_id = query.data.split(":")[1]
+    bouquet = db.get_bouquet_by_id(bouquet_id)
+    
+    if not bouquet:
+        await query.message.reply_text("Букет не найден")
+        return ConversationHandler.END
+    
+    context.user_data['bouquet'] = bouquet
+    context.user_data['order'] = {}
     
     # Шаг 1: Цвет
-    builder = InlineKeyboardBuilder()
-    color_map = {
-        "pink": ("🩷", "Розовый"),
-        "red": ("❤️", "Красный"),
-        "blue": ("💙", "Синий"),
-        "white": ("🤍", "Белый"),
-        "mix": ("🌈", "Микс")
-    }
+    color_emoji = {"pink": "🩷", "red": "❤️", "blue": "💙", "white": "🤍", "mix": "🌈"}
+    color_name = {"pink": "Розовый", "red": "Красный", "blue": "Синий", "white": "Белый", "mix": "Микс"}
     
+    keyboard = []
     for color in bouquet.get('colors', []):
-        emoji, name = color_map.get(color, ("🎨", color))
-        builder.button(text=f"{emoji} {name}", callback_data=f"color:{color}")
+        keyboard.append([InlineKeyboardButton(
+            f"{color_emoji.get(color, '')} {color_name.get(color, color)}",
+            callback_data=f"color:{color}"
+        )])
+    keyboard.append([InlineKeyboardButton("❌ Отмена", callback_data="cancel")])
     
-    builder.button(text="◀️ Отмена", callback_data="cancel_order")
-    builder.adjust(2)
+    await query.message.reply_text(
+        f"*{bouquet['name']}*\n\nВыберите цвет роз:",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
     
-    await callback.message.answer("Выберите цвет роз:", reply_markup=builder.as_markup())
-    await state.set_state(BouquetConstructor.choosing_color)
-    await callback.answer()
+    return CHOOSING_COLOR
 
-@router.callback_query(BouquetConstructor.choosing_color, F.data.startswith("color:"))
-async def color_chosen(callback: CallbackQuery, state: FSMContext):
-    # Цвет выбран, далее количество
-    color = callback.data.split(":")[1]
-    await state.update_data(color=color)
+async def choose_color(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Выбор цвета"""
+    query = update.callback_query
+    await query.answer()
     
-    data = await state.get_data()
-    bouquet = await get_bouquet_by_id(data['bouquet_id'])
+    color = query.data.split(":")[1]
+    context.user_data['order']['color'] = color
     
-    builder = InlineKeyboardBuilder()
+    bouquet = context.user_data['bouquet']
+    
+    # Шаг 2: Количество
+    keyboard = []
     for qty in bouquet.get('quantities', []):
         val = qty['value']
         mult = qty['multiplier']
         price = int(bouquet['base_price'] * mult)
-        builder.button(text=f"{val} роз - {price}₽", callback_data=f"qty:{val}:{price}")
-        
-    builder.button(text="◀️ Назад", callback_data="back_to_color")
-    builder.adjust(1)
+        keyboard.append([InlineKeyboardButton(
+            f"{val} роз - {price}₽",
+            callback_data=f"qty:{val}:{price}"
+        )])
+    keyboard.append([InlineKeyboardButton("◀️ Назад", callback_data="back_color")])
     
-    await callback.message.edit_text("Выберите количество роз:", reply_markup=builder.as_markup())
-    await state.set_state(BouquetConstructor.choosing_quantity)
+    await query.message.edit_text(
+        "Выберите количество роз:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    
+    return CHOOSING_QUANTITY
 
-@router.callback_query(BouquetConstructor.choosing_quantity, F.data.startswith("qty:"))
-async def quantity_chosen(callback: CallbackQuery, state: FSMContext):
-    # Количество выбрано, далее упаковка
-    _, qty, price = callback.data.split(":")
-    await state.update_data(quantity=int(qty), price=int(price))
+async def choose_quantity(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Выбор количества"""
+    query = update.callback_query
+    await query.answer()
     
-    data = await state.get_data()
-    bouquet = await get_bouquet_by_id(data['bouquet_id'])
+    _, qty, price = query.data.split(":")
+    context.user_data['order']['quantity'] = int(qty)
+    context.user_data['order']['base_price'] = int(price)
     
-    builder = InlineKeyboardBuilder()
+    bouquet = context.user_data['bouquet']
+    
+    # Шаг 3: Упаковка
+    keyboard = []
     for pkg in bouquet.get('packaging', []):
-        p_name = pkg['name']
-        p_price = pkg['price']
-        label = f"{p_name} - {p_price}₽" if p_price > 0 else f"{p_name} - Бесплатно"
-        builder.button(text=label, callback_data=f"pkg:{pkg['type']}:{p_price}:{p_name}")
+        label = pkg['name']
+        if pkg['price'] > 0:
+            label += f" (+{pkg['price']}₽)"
+        keyboard.append([InlineKeyboardButton(label, callback_data=f"pkg:{pkg['type']}:{pkg['price']}")])
+    keyboard.append([InlineKeyboardButton("◀️ Назад", callback_data="back_qty")])
+    
+    await query.message.edit_text(
+        "Выберите упаковку:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    
+    return CHOOSING_PACKAGING
+
+async def choose_packaging(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Выбор упаковки"""
+    query = update.callback_query
+    await query.answer()
+    
+    _, pkg_type, pkg_price = query.data.split(":")
+    context.user_data['order']['packaging'] = {'type': pkg_type, 'price': int(pkg_price)}
+    
+    # Шаг 4: Дополнительные услуги
+    keyboard = [
+        [InlineKeyboardButton("⚡️ Срочно за 1 день (+1000₽)", callback_data="extra:urgent:1000")],
+        [InlineKeyboardButton("💌 Открытка (+100₽)", callback_data="extra:card:100")],
+        [InlineKeyboardButton("✅ Продолжить без допов", callback_data="extra:none:0")],
+        [InlineKeyboardButton("◀️ Назад", callback_data="back_pkg")]
+    ]
+    
+    await query.message.edit_text(
+        "Дополнительные услуги:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    
+    return CHOOSING_EXTRAS
+
+async def choose_extras(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Выбор дополнительных услуг"""
+    query = update.callback_query
+    await query.answer()
+    
+    _, extra_type, price = query.data.split(":")
+    
+    if 'extras' not in context.user_data['order']:
+        context.user_data['order']['extras'] = {}
+    
+    if extra_type == "urgent":
+        context.user_data['order']['extras']['urgent'] = True
+        await query.answer("Срочный заказ добавлен")
+        return CHOOSING_EXTRAS
+    elif extra_type == "card":
+        await query.message.reply_text("Введите текст для открытки (до 200 символов):")
+        return CARD_TEXT
+    else:
+        # Переходим к дате
+        today = datetime.now()
+        keyboard = []
+        for i in range(7):
+            date = today + timedelta(days=i)
+            label = "Сегодня" if i == 0 else "Завтра" if i == 1 else date.strftime("%d.%m")
+            keyboard.append([InlineKeyboardButton(label, callback_data=f"date:{date.strftime('%Y-%m-%d')}")])
         
-    builder.button(text="◀️ Назад", callback_data="back_to_qty")
-    builder.adjust(1)
+        await query.message.edit_text(
+            "На какую дату нужен букет?",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        
+        return CHOOSING_DATE
+
+async def card_text_entered(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Текст открытки введен"""
+    text = update.message.text[:200]
+    context.user_data['order']['extras']['card_text'] = text
     
-    await callback.message.edit_text("Выберите упаковку:", reply_markup=builder.as_markup())
-    await state.set_state(BouquetConstructor.choosing_packaging)
-
-@router.callback_query(BouquetConstructor.choosing_packaging, F.data.startswith("pkg:"))
-async def packaging_chosen(callback: CallbackQuery, state: FSMContext):
-    # Упаковка выбрана, далее допы
-    _, pkg_type, pkg_price, pkg_name = callback.data.split(":")
-    await state.update_data(packaging={'type': pkg_type, 'price': int(pkg_price), 'name': pkg_name})
+    # Переходим к дате
+    today = datetime.now()
+    keyboard = []
+    for i in range(7):
+        date = today + timedelta(days=i)
+        label = "Сегодня" if i == 0 else "Завтра" if i == 1 else date.strftime("%d.%m")
+        keyboard.append([InlineKeyboardButton(label, callback_data=f"date:{date.strftime('%Y-%m-%d')}")])
     
-    builder = InlineKeyboardBuilder()
-    builder.button(text="⚡️ Срочно (+1000₽)", callback_data="extra_urgent")
-    builder.button(text="💌 Открытка (+100₽)", callback_data="extra_card")
-    builder.button(text="✅ Готово / без доп.", callback_data="extra_done")
-    builder.button(text="◀️ Назад", callback_data="back_to_pkg")
-    builder.adjust(1)
+    await update.message.reply_text(
+        "На какую дату нужен букет?",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
     
-    await callback.message.edit_text("Дополнительные услуги:", reply_markup=builder.as_markup())
-    await state.set_state(BouquetConstructor.choosing_extras)
+    return CHOOSING_DATE
 
-@router.callback_query(BouquetConstructor.choosing_extras)
-async def extras_chosen(callback: CallbackQuery, state: FSMContext):
-    # Обработка допов
-    data = await state.get_data()
-    extras = data.get('extras', {'urgent': False, 'card': False})
+async def choose_date(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Выбор даты"""
+    query = update.callback_query
+    await query.answer()
     
-    if callback.data == "extra_urgent":
-        extras['urgent'] = not extras['urgent']
-        await state.update_data(extras=extras)
-        await callback.answer("Срочность " + ("добавлена" if extras['urgent'] else "убрана"))
-    elif callback.data == "extra_card":
-        extras['card'] = not extras['card']
-        await state.update_data(extras=extras)
-        if extras['card']:
-            await callback.message.answer("Введите текст для открытки:")
-            await state.set_state(BouquetConstructor.entering_card_text)
-            return
-        else:
-            await callback.answer("Открытка убрана")
-    elif callback.data == "extra_done":
-        # Переход к дате
-        builder = InlineKeyboardBuilder()
-        builder.button(text="📅 Сегодня", callback_data="date:today")
-        builder.button(text="📅 Завтра", callback_data="date:tomorrow")
-        builder.button(text="Ввести дату", callback_data="date:custom")
-        builder.adjust(2)
-        await callback.message.answer("Когда доставить?", reply_markup=builder.as_markup())
-        await state.set_state(BouquetConstructor.choosing_date)
-        return
-
-    # Если мы остались в меню допов, обновляем клавиатуру (можно добавить галочки)
-    # Для простоты просто ждем нажатия Готово
-
-@router.message(BouquetConstructor.entering_card_text)
-async def card_text_entering(message: Message, state: FSMContext):
-    # Текст открытки введен
-    await state.update_data(card_text=message.text)
-    builder = InlineKeyboardBuilder()
-    builder.button(text="✅ Продолжить", callback_data="extra_done")
-    await message.answer("Текст сохранен.", reply_markup=builder.as_markup())
-    await state.set_state(BouquetConstructor.choosing_extras)
-
-@router.callback_query(BouquetConstructor.choosing_date)
-async def date_chosen(callback: CallbackQuery, state: FSMContext):
-    # Дата выбрана
-    date_val = callback.data.split(":")[1]
-    await state.update_data(delivery_date=date_val)
+    date = query.data.split(":")[1]
+    context.user_data['order']['date'] = date
     
-    # Время
-    builder = InlineKeyboardBuilder()
-    times = ["10:00", "12:00", "14:00", "16:00", "18:00", "20:00"]
-    for t in times:
-        builder.button(text=t, callback_data=f"time:{t}")
-    builder.adjust(3)
-    await callback.message.answer("Выберите время:", reply_markup=builder.as_markup())
-    await state.set_state(BouquetConstructor.choosing_time)
-
-@router.callback_query(BouquetConstructor.choosing_time)
-async def time_chosen(callback: CallbackQuery, state: FSMContext):
-    # Время выбрано
-    time_val = callback.data.split(":")[1]
-    await state.update_data(delivery_time=time_val)
+    # Шаг: Время
+    keyboard = [
+        [InlineKeyboardButton("10:00", callback_data="time:10:00"), InlineKeyboardButton("12:00", callback_data="time:12:00")],
+        [InlineKeyboardButton("14:00", callback_data="time:14:00"), InlineKeyboardButton("16:00", callback_data="time:16:00")],
+        [InlineKeyboardButton("18:00", callback_data="time:18:00"), InlineKeyboardButton("20:00", callback_data="time:20:00")]
+    ]
     
-    # Способ получения
-    builder = InlineKeyboardBuilder()
-    builder.button(text="🏠 Самовывоз", callback_data="pickup:shop")
-    builder.button(text="📍 Доставка/Встреча", callback_data="pickup:meeting")
-    builder.adjust(2)
-    await callback.message.answer("Способ получения:", reply_markup=builder.as_markup())
-    await state.set_state(BouquetConstructor.choosing_pickup)
+    await query.message.edit_text(
+        "К какому времени?",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    
+    return CHOOSING_TIME
 
-@router.callback_query(BouquetConstructor.choosing_pickup)
-async def pickup_chosen(callback: CallbackQuery, state: FSMContext):
-    # Способ выбран
-    method = callback.data.split(":")[1]
-    await state.update_data(pickup_method=method)
+async def choose_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Выбор времени"""
+    query = update.callback_query
+    await query.answer()
+    
+    time = query.data.split(":")[1] + ":" + query.data.split(":")[2]
+    context.user_data['order']['time'] = time
+    
+    # Шаг: Способ получения
+    keyboard = [
+        [InlineKeyboardButton("🏠 Самовывоз", callback_data="pickup:self")],
+        [InlineKeyboardButton("📍 Встреча в городе", callback_data="pickup:meeting")]
+    ]
+    
+    await query.message.edit_text(
+        "Как будете получать?",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    
+    return CHOOSING_PICKUP
+
+async def choose_pickup(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Выбор способа получения"""
+    query = update.callback_query
+    await query.answer()
+    
+    method = query.data.split(":")[1]
+    context.user_data['order']['pickup'] = method
     
     if method == "meeting":
-        await callback.message.answer("Введите адрес доставки/встречи:")
-        await state.set_state(BouquetConstructor.entering_address)
+        await query.message.reply_text("Введите адрес встречи:")
+        return ENTERING_ADDRESS
     else:
-        await state.update_data(address="Самовывоз из магазина")
-        await show_order_summary(callback.message, state)
+        context.user_data['order']['address'] = "Самовывоз"
+        return await show_summary(update, context)
 
-@router.message(BouquetConstructor.entering_address)
-async def address_entered(message: Message, state: FSMContext):
-    # Адрес введен
-    await state.update_data(address=message.text)
-    await show_order_summary(message, state)
+async def enter_address(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Ввод адреса"""
+    context.user_data['order']['address'] = update.message.text
+    return await show_summary(update, context)
 
-async def show_order_summary(message: Message, state: FSMContext):
-    # Показать итог и добавить в корзину
-    data = await state.get_data()
+async def show_summary(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показать итог"""
+    bouquet = context.user_data['bouquet']
+    order = context.user_data['order']
     
     # Расчет цены
-    base = data['price']
-    pkg = data['packaging']['price']
-    extras_price = 0
-    extras = data.get('extras', {})
-    if extras.get('urgent'): extras_price += 1000
-    if extras.get('card'): extras_price += 100
+    total = order['base_price'] + order['packaging']['price']
     
-    total = base + pkg + extras_price
-    await state.update_data(total_price=total)
+    extras_text = ""
+    if order.get('extras', {}).get('urgent'):
+        total += 1000
+        extras_text += "⚡️ Срочный заказ: Да\n"
     
-    text = (
-        f"📋 <b>Ваш заказ:</b>\n\n"
-        f"🌹 {data['bouquet_name']}\n"
-        f"🎨 Цвет: {data['color']}\n"
-        f"🔢 Количество: {data['quantity']} роз\n"
-        f"📦 Упаковка: {data['packaging']['name']}\n"
-        f"⚡️ Срочно: {'Да' if extras.get('urgent') else 'Нет'}\n"
-        f"💌 Открытка: {'Да' if extras.get('card') else 'Нет'}\n"
-        f"📅 Дата: {data['delivery_date']} {data['delivery_time']}\n"
-        f"📍 {data['pickup_method']}: {data['address']}\n\n"
-        f"💰 <b>Итого: {total}₽</b>"
+    if order.get('extras', {}).get('card_text'):
+        total += 100
+        extras_text += f"💌 Открытка: {order['extras']['card_text']}\n"
+    
+    order['total_price'] = total
+    
+    summary = (
+        f"*📋 Ваш заказ:*\n\n"
+        f"🌹 {bouquet['name']}\n"
+        f"🎨 Цвет: {order['color']}\n"
+        f"🔢 Количество: {order['quantity']} роз\n"
+        f"📦 Упаковка: {order['packaging']['type']}\n"
+        f"{extras_text}"
+        f"📅 Дата: {order['date']}\n"
+        f"⏰ Время: {order['time']}\n"
+        f"📍 Получение: {order['pickup']} - {order['address']}\n\n"
+        f"💰 *Итого: {total}₽*"
     )
     
-    builder = InlineKeyboardBuilder()
-    builder.button(text="✅ В корзину", callback_data="confirm_add_to_cart")
-    builder.button(text="❌ Отмена", callback_data="cancel_order")
-    builder.adjust(1)
+    keyboard = [
+        [InlineKeyboardButton("✅ Добавить в корзину", callback_data="confirm_cart")],
+        [InlineKeyboardButton("❌ Отмена", callback_data="cancel")]
+    ]
     
-    await message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
-    await state.set_state(BouquetConstructor.confirming)
+    # Определяем тип update
+    if update.callback_query:
+        await update.callback_query.message.reply_text(
+            summary,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+    else:
+        await update.message.reply_text(
+            summary,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+    
+    return ConversationHandler.END
 
-@router.callback_query(BouquetConstructor.confirming, F.data == "confirm_add_to_cart")
-async def add_to_cart_confirm(callback: CallbackQuery, state: FSMContext):
-    # Добавляем в корзину и сбрасываем стейт
-    data = await state.get_data()
-    user_id = callback.from_user.id
+async def confirm_add_to_cart(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Подтверждение добавления в корзину"""
+    query = update.callback_query
+    await query.answer("Добавлено в корзину!")
+    
+    bouquet = context.user_data['bouquet']
+    order = context.user_data['order']
     
     item = {
-        'bouquet_id': data['bouquet_id'],
-        'bouquet_name': data['bouquet_name'],
-        'color': data['color'],
-        'quantity': data['quantity'],
-        'packaging': data['packaging'],
-        'urgent_order': data.get('extras', {}).get('urgent', False),
-        'greeting_card': {
-            'enabled': data.get('extras', {}).get('card', False),
-            'text': data.get('card_text', '')
-        },
-        'delivery_date': data['delivery_date'],
-        'ready_time': data['delivery_time'],
-        'pickup_method': data['pickup_method'],
-        'address': data['address'],
-        'total_price': data['total_price']
+        'bouquet_id': bouquet['id'],
+        'bouquet_name': bouquet['name'],
+        'color': order['color'],
+        'quantity': order['quantity'],
+        'packaging': order['packaging'],
+        'extras': order.get('extras', {}),
+        'date': order['date'],
+        'time': order['time'],
+        'pickup': order['pickup'],
+        'address': order['address'],
+        'total_price': order['total_price']
     }
     
-    await add_to_cart(user_id, item)
-    await state.clear()
-    await callback.message.answer("✅ Товар добавлен в корзину!")
-    await callback.answer()
+    db.add_to_cart(update.effective_user.id, item)
+    
+    await query.message.edit_text("✅ Товар добавлен в корзину!")
+    context.user_data.clear()
 
-@router.callback_query(F.data == "cancel_order")
-async def cancel_order(callback: CallbackQuery, state: FSMContext):
-    await state.clear()
-    await callback.message.answer("❌ Заказ отменен.")
-    await callback.answer()
-
-@router.message(F.text == "🛒 Корзина")
-async def show_cart_handler(message: Message):
-    # Показать корзину
-    user_id = message.from_user.id
-    cart = await get_user_cart(user_id)
+async def show_cart(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показать корзину"""
+    cart = db.get_user_cart(update.effective_user.id)
     
     if not cart:
-        await message.answer("Корзина пуста.")
+        await update.message.reply_text("Корзина пуста")
         return
+    
+    total = 0
+    for i, item in enumerate(cart):
+        total += item['total_price']
         
-    total_sum = 0
-    for idx, item in enumerate(cart):
-        total_sum += item['total_price']
+        extras = []
+        if item.get('extras', {}).get('urgent'):
+            extras.append("⚡️ Срочно")
+        if item.get('extras', {}).get('card_text'):
+            extras.append("💌 Открытка")
+        
+        extras_text = " • " + " • ".join(extras) if extras else ""
+        
         text = (
-            f"🌹 {item['bouquet_name']} ({item['quantity']} шт)\n"
-            f"🎨 {item['color']} | 📦 {item['packaging']['name']}\n"
+            f"🌹 *{item['bouquet_name']}*\n"
+            f"🎨 {item['color']} • {item['quantity']} роз{extras_text}\n"
+            f"📅 {item['date']} {item['time']}\n"
+            f"📍 {item['pickup']}: {item['address']}\n"
             f"💰 {item['total_price']}₽"
         )
-        await message.answer(text, reply_markup=get_cart_item_keyboard(idx))
-    
-    await message.answer(
-        f"💰 <b>Общая сумма: {total_sum}₽</b>",
-        reply_markup=get_cart_summary_keyboard(message.from_user.username),
-        parse_mode="HTML"
-    )
-
-@router.callback_query(F.data == "cart_clear")
-async def clear_cart_handler(callback: CallbackQuery):
-    await clear_cart(callback.from_user.id)
-    await callback.message.answer("Корзина очищена.")
-    await callback.answer()
-
-@router.callback_query(F.data.startswith("cart_remove:"))
-async def remove_cart_item_handler(callback: CallbackQuery):
-    idx = int(callback.data.split(":")[1])
-    await remove_from_cart(callback.from_user.id, idx)
-    await callback.message.answer("Товар удален.")
-    await show_cart_handler(callback.message) # Refresh
-    await callback.answer()
-
-@router.callback_query(F.data == "checkout")
-async def checkout_handler(callback: CallbackQuery):
-    # Оплата (заглушка)
-    builder = InlineKeyboardBuilder()
-    builder.button(text="✅ Я оплатил", callback_data="payment_confirm")
-    builder.button(text="❌ Отмена", callback_data="payment_cancel")
-    
-    await callback.message.answer(
-        "Переведите средсва на карту 1234-5678\nНажмите кнопку после оплаты.",
-        reply_markup=builder.as_markup()
-    )
-    await callback.answer()
-
-@router.callback_query(F.data == "payment_confirm")
-async def payment_confirm_handler(callback: CallbackQuery, bot: Bot):
-    # Подтверждение оплаты и создание заказа
-    user_id = callback.from_user.id
-    user_name = callback.from_user.full_name
-    order_id = await create_order(user_id, user_name)
-    await clear_cart(user_id)
-    
-    await callback.message.answer(f"✅ Заказ #{order_id} оформлен! Менеджер свяжется с вами.")
-    await callback.answer()
-    
-    # Уведомление админам (нужно реализовать notify_admins)
-
-@router.message(F.text == "⭐️ Избранное")
-async def favorites_handler(message: Message):
-    # Показать избранное
-    user_id = message.from_user.id
-    fav_ids = await get_favorites(user_id)
-    if not fav_ids:
-        await message.answer("В избранном пусто.")
-        return
         
-    for bid in fav_ids:
-        bouquet = await get_bouquet_by_id(bid)
+        keyboard = [[InlineKeyboardButton("🗑 Удалить", callback_data=f"remove:{i}")]]
+        
+        await update.message.reply_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+    
+    keyboard = [
+        [InlineKeyboardButton("💳 Оплатить", callback_data="checkout")],
+        [InlineKeyboardButton("💬 Связаться", url=f"https://t.me/{CONTACT_USERNAME}")],
+        [InlineKeyboardButton("🗑 Очистить корзину", callback_data="clear_cart")]
+    ]
+    
+    await update.message.reply_text(
+        f"*💰 Итого: {total}₽*",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+
+async def remove_from_cart(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Удалить из корзины"""
+    query = update.callback_query
+    await query.answer("Удалено")
+    
+    index = int(query.data.split(":")[1])
+    db.remove_from_cart(update.effective_user.id, index)
+    
+    await query.message.edit_text("🗑 Товар удален")
+
+async def clear_cart_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Очистить корзину"""
+    query = update.callback_query
+    await query.answer()
+    
+    db.clear_cart(update.effective_user.id)
+    await query.message.edit_text("🗑 Корзина очищена")
+
+async def checkout(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Оплата"""
+    query = update.callback_query
+    await query.answer()
+    
+    cart = db.get_user_cart(update.effective_user.id)
+    total = sum(item['total_price'] for item in cart)
+    
+    keyboard = [
+        [InlineKeyboardButton("✅ Я оплатил", callback_data="payment_confirm")],
+        [InlineKeyboardButton("❌ Отмена", callback_data="cancel")]
+    ]
+    
+    await query.message.edit_text(
+        f"*💳 Оплата заказа*\n\n"
+        f"Сумма: *{total}₽*\n\n"
+        f"Реквизиты:\n"
+        f"💳 Карта: `2200 7007 1234 5678`\n"
+        f"👤 Flower Shop\n\n"
+        f"После оплаты нажмите кнопку:",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+
+async def payment_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Подтверждение оплаты"""
+    query = update.callback_query
+    await query.answer("Заказ оформлен!")
+    
+    user = update.effective_user
+    cart = db.get_user_cart(user.id)
+    
+    order_id = db.create_order(user.id, user.full_name, cart)
+    db.clear_cart(user.id)
+    
+    await query.message.edit_text(
+        f"✅ *Заказ #{order_id} оформлен!*\n\n"
+        f"Спасибо! Мы свяжемся с вами.",
+        parse_mode='Markdown'
+    )
+    
+    # Уведомление админу
+    from config import ADMIN_ID
+    try:
+        await context.bot.send_message(
+            ADMIN_ID,
+            f"🔔 *Новый заказ!*\n\nЗаказ #{order_id}\nОт: {user.full_name}",
+            parse_mode='Markdown'
+        )
+    except:
+        pass
+
+async def toggle_fav(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Переключить избранное"""
+    query = update.callback_query
+    
+    bouquet_id = query.data.split(":")[1]
+    db.toggle_favorite(update.effective_user.id, bouquet_id)
+    
+    # Обновляем кнопку
+    favorites = db.get_favorites(update.effective_user.id)
+    is_fav = bouquet_id in favorites
+    
+    await query.answer("❤️ Добавлено" if is_fav else "Удалено")
+
+async def show_favorites(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показать избранное"""
+    favorites = db.get_favorites(update.effective_user.id)
+    
+    if not favorites:
+        await update.message.reply_text("Избранное пусто")
+        return
+    
+    for bid in favorites:
+        bouquet = db.get_bouquet_by_id(bid)
         if bouquet:
-            caption = f"⭐️ <b>{bouquet['name']}</b>\n{bouquet['base_price']}₽"
+            caption = f"⭐️ *{bouquet['name']}*\n{bouquet['base_price']}₽"
+            
+            keyboard = [[InlineKeyboardButton("🛒 Заказать", callback_data=f"order:{bouquet['id']}")]]
+            
             try:
-                photo = FSInputFile(bouquet['image_path'])
-                await message.answer_photo(photo=photo, caption=caption, parse_mode="HTML")
+                with open(bouquet['image_path'], 'rb') as photo:
+                    await update.message.reply_photo(
+                        photo=photo,
+                        caption=caption,
+                        reply_markup=InlineKeyboardMarkup(keyboard),
+                        parse_mode='Markdown'
+                    )
             except:
-                await message.answer(caption, parse_mode="HTML")
+                await update.message.reply_text(caption, parse_mode='Markdown')
 
-@router.callback_query(F.data.startswith("fav_toggle:"))
-async def fav_toggle_handler(callback: CallbackQuery):
-    bid = callback.data.split(":")[1]
-    await toggle_favorite(callback.from_user.id, bid)
-    await callback.answer("Избранное обновлено")
+async def show_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показать заказы"""
+    orders = db.get_user_orders(update.effective_user.id)
+    
+    if not orders:
+        await update.message.reply_text("У вас пока нет заказов")
+        return
+    
+    for order in orders[-10:]:
+        text = (
+            f"📦 *Заказ #{order['order_id']}*\n"
+            f"📅 {order['created_at'][:16]}\n"
+            f"💰 {order['total_price']}₽\n"
+            f"Статус: {'⏳ В обработке' if order['status'] == 'pending' else '✅ Выполнен'}"
+        )
+        
+        keyboard = [[InlineKeyboardButton("📋 Детали", callback_data=f"order_details:{order['order_id']}")]]
+        
+        await update.message.reply_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
 
-@router.inline_query()
-async def inline_share_handler(inline_query: InlineQuery):
-    # Поделиться букетом через inline
-    query = inline_query.query
-    if query.startswith("bouquet_"):
-        bid = query.split("_")[1]
-        bouquet = await get_bouquet_by_id(bid)
-        if bouquet:
-            result = InlineQueryResultArticle(
-                id=bid,
-                title=bouquet['name'],
-                description=f"Цена: {bouquet['base_price']}₽",
-                thumbnail_url="https://via.placeholder.com/150", # Заглушка, т.к. локальные файлы не работают в inline
-                input_message_content=InputTextMessageContent(
-                    message_text=f"Посмотри этот букет: {bouquet['name']}!\nЦена: {bouquet['base_price']}₽"
-                )
-            )
-            await inline_query.answer([result], cache_time=1)
+async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Информация"""
+    text = (
+        "*ℹ️ Информация*\n\n"
+        "🌹 Flower Shop - магазин букетов ручной работы\n\n"
+        f"📞 Telegram: @{CONTACT_USERNAME}\n"
+        "⏰ Работаем 24/7"
+    )
+    await update.message.reply_text(text, parse_mode='Markdown')
+
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Отмена"""
+    if update.callback_query:
+        await update.callback_query.answer()
+        await update.callback_query.message.edit_text("❌ Отменено")
+    else:
+        await update.message.reply_text("❌ Отменено")
+    
+    context.user_data.clear()
+    return ConversationHandler.END
+
+def register_handlers(application):
+    """Регистрация обработчиков"""
+    # Команды
+    application.add_handler(CommandHandler("start", start))
+    
+    # Главное меню
+    application.add_handler(MessageHandler(filters.Regex("🌹 Каталог"), catalog))
+    application.add_handler(MessageHandler(filters.Regex("🛒 Корзина"), show_cart))
+    application.add_handler(MessageHandler(filters.Regex("⭐️ Избранное"), show_favorites))
+    application.add_handler(MessageHandler(filters.Regex("📦 Мои заказы"), show_orders))
+    application.add_handler(MessageHandler(filters.Regex("ℹ️ Информация"), info))
+    
+    # ConversationHandler для заказа
+    conv_handler = ConversationHandler(
+        entry_points=[CallbackQueryHandler(start_order, pattern="^order:")],
+        states={
+            CHOOSING_COLOR: [CallbackQueryHandler(choose_color, pattern="^color:")],
+            CHOOSING_QUANTITY: [CallbackQueryHandler(choose_quantity, pattern="^qty:")],
+            CHOOSING_PACKAGING: [CallbackQueryHandler(choose_packaging, pattern="^pkg:")],
+            CHOOSING_EXTRAS: [CallbackQueryHandler(choose_extras, pattern="^extra:")],
+            CARD_TEXT: [MessageHandler(filters.TEXT & ~filters.COMMAND, card_text_entered)],
+            CHOOSING_DATE: [CallbackQueryHandler(choose_date, pattern="^date:")],
+            CHOOSING_TIME: [CallbackQueryHandler(choose_time, pattern="^time:")],
+            CHOOSING_PICKUP: [CallbackQueryHandler(choose_pickup, pattern="^pickup:")],
+            ENTERING_ADDRESS: [MessageHandler(filters.TEXT & ~filters.COMMAND, enter_address)]
+        },
+        fallbacks=[CallbackQueryHandler(cancel, pattern="^cancel$")]
+    )
+    
+    application.add_handler(conv_handler)
+    
+    # Callback handlers
+    application.add_handler(CallbackQueryHandler(confirm_add_to_cart, pattern="^confirm_cart$"))
+    application.add_handler(CallbackQueryHandler(remove_from_cart, pattern="^remove:"))
+    application.add_handler(CallbackQueryHandler(clear_cart_handler, pattern="^clear_cart$"))
+    application.add_handler(CallbackQueryHandler(checkout, pattern="^checkout$"))
+    application.add_handler(CallbackQueryHandler(payment_confirm, pattern="^payment_confirm$"))
+    application.add_handler(CallbackQueryHandler(toggle_fav, pattern="^fav:"))

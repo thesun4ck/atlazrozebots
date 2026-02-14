@@ -1,356 +1,239 @@
 import yaml
-import aiofiles
-from typing import List, Dict, Optional
-from datetime import datetime
 import os
+from datetime import datetime
+from typing import List, Dict, Optional
 
 DATA_DIR = "data"
 
+def _ensure_file(filename, default_data):
+    """Создать файл если не существует"""
+    filepath = os.path.join(DATA_DIR, filename)
+    if not os.path.exists(filepath):
+        with open(filepath, 'w', encoding='utf-8') as f:
+            yaml.dump(default_data, f, allow_unicode=True)
+
+def load_yaml(filename):
+    """Загрузить YAML файл"""
+    filepath = os.path.join(DATA_DIR, filename)
+    _ensure_file(filename, {})
+    
+    with open(filepath, 'r', encoding='utf-8') as f:
+        return yaml.safe_load(f) or {}
+
+def save_yaml(filename, data):
+    """Сохранить в YAML файл"""
+    filepath = os.path.join(DATA_DIR, filename)
+    with open(filepath, 'w', encoding='utf-8') as f:
+        yaml.dump(data, f, allow_unicode=True)
+
 # ============ БУКЕТЫ ============
 
-async def get_bouquets() -> List[Dict]:
-    # Получить все букеты из файла
-    async with aiofiles.open(f"{DATA_DIR}/bouquets.yaml", "r", encoding="utf-8") as f:
-        content = await f.read()
-        data = yaml.safe_load(content)
-        return data.get('bouquets', [])
+def get_bouquets():
+    """Получить все букеты"""
+    data = load_yaml('bouquets.yaml')
+    return data.get('bouquets', [])
 
-async def get_bouquet_by_id(bouquet_id: str) -> Optional[Dict]:
-    # Найти букет по ID
-    bouquets = await get_bouquets()
-    return next((b for b in bouquets if b['id'] == bouquet_id), None)
+def get_bouquet_by_id(bouquet_id):
+    """Получить букет по ID"""
+    bouquets = get_bouquets()
+    for b in bouquets:
+        if b['id'] == bouquet_id:
+            return b
+    return None
 
-async def get_bouquets_by_ids(bouquet_ids: List[str]) -> List[Dict]:
-    # Получить список букетов по их ID
-    bouquets = await get_bouquets()
-    return [b for b in bouquets if b['id'] in bouquet_ids]
-
-async def save_bouquet(bouquet_data: Dict) -> str:
-    # Сохранить новый букет
-    bouquets = await get_bouquets()
+def save_bouquet(bouquet):
+    """Сохранить новый букет"""
+    data = load_yaml('bouquets.yaml')
+    if 'bouquets' not in data:
+        data['bouquets'] = []
     
     # Генерируем ID
     max_id = 0
-    for b in bouquets:
+    for b in data['bouquets']:
         try:
             bid = int(b['id'].replace('b', ''))
             if bid > max_id:
                 max_id = bid
-        except ValueError:
+        except:
             pass
-            
-    bouquet_id = f"b{max_id + 1}"
     
-    new_bouquet = {
-        'id': bouquet_id,
-        'name': bouquet_data['name'],
-        'description': bouquet_data['description'],
-        'base_price': bouquet_data['base_price'],
-        'image_path': bouquet_data['image_path'],
-        'is_popular': bouquet_data['is_popular'],
-        'colors': ["pink", "red", "blue", "white", "mix"],
-        'quantities': [
-            {'value': 15, 'multiplier': 0.6},
-            {'value': 25, 'multiplier': 1.0},
-            {'value': 51, 'multiplier': 1.8},
-            {'value': 101, 'multiplier': 3.2}
-        ],
-        'packaging': [
-            {'type': 'standard', 'name': 'Стандарт', 'price': 0},
-            {'type': 'premium', 'name': 'Премиум', 'price': 300},
-            {'type': 'black', 'name': 'Черная', 'price': 500}
-        ]
-    }
-    
-    bouquets.append(new_bouquet)
-    
-    async with aiofiles.open(f"{DATA_DIR}/bouquets.yaml", "w", encoding="utf-8") as f:
-        await f.write(yaml.dump({'bouquets': bouquets}, allow_unicode=True))
-    
-    return bouquet_id
+    bouquet['id'] = f"b{max_id + 1}"
+    data['bouquets'].append(bouquet)
+    save_yaml('bouquets.yaml', data)
+    return bouquet['id']
 
-async def update_bouquet(bouquet_id: str, updates: Dict):
-    # Обновить данные существующего букета
-    bouquets = await get_bouquets()
+def update_bouquet(bouquet_id, updates):
+    """Обновить букет"""
+    data = load_yaml('bouquets.yaml')
+    bouquets = data.get('bouquets', [])
     
-    for bouquet in bouquets:
-        if bouquet['id'] == bouquet_id:
-            bouquet.update(updates)
+    for i, b in enumerate(bouquets):
+        if b['id'] == bouquet_id:
+            bouquets[i].update(updates)
             break
     
-    async with aiofiles.open(f"{DATA_DIR}/bouquets.yaml", "w", encoding="utf-8") as f:
-        await f.write(yaml.dump({'bouquets': bouquets}, allow_unicode=True))
+    data['bouquets'] = bouquets
+    save_yaml('bouquets.yaml', data)
 
-async def delete_bouquet_by_id(bouquet_id: str):
-    # Удалить букет по ID
-    bouquets = await get_bouquets()
-    bouquets = [b for b in bouquets if b['id'] != bouquet_id]
-    
-    async with aiofiles.open(f"{DATA_DIR}/bouquets.yaml", "w", encoding="utf-8") as f:
-        await f.write(yaml.dump({'bouquets': bouquets}, allow_unicode=True))
+def delete_bouquet(bouquet_id):
+    """Удалить букет"""
+    data = load_yaml('bouquets.yaml')
+    bouquets = [b for b in data.get('bouquets', []) if b['id'] != bouquet_id]
+    data['bouquets'] = bouquets
+    save_yaml('bouquets.yaml', data)
 
 # ============ КОРЗИНА ============
 
-async def get_user_cart(user_id: int) -> List[Dict]:
-    # Получить содержимое корзины пользователя
-    async with aiofiles.open(f"{DATA_DIR}/carts.yaml", "r", encoding="utf-8") as f:
-        content = await f.read()
-        data = yaml.safe_load(content) or {'carts': {}}
-        return data.get('carts', {}).get(str(user_id), [])
+def get_user_cart(user_id):
+    """Получить корзину пользователя"""
+    data = load_yaml('carts.yaml')
+    carts = data.get('carts', {})
+    return carts.get(str(user_id), [])
 
-async def add_to_cart(user_id: int, item: Dict):
-    # Добавить товар в корзину пользователя
-    async with aiofiles.open(f"{DATA_DIR}/carts.yaml", "r", encoding="utf-8") as f:
-        content = await f.read()
-        data = yaml.safe_load(content) or {'carts': {}}
-    
+def add_to_cart(user_id, item):
+    """Добавить в корзину"""
+    data = load_yaml('carts.yaml')
     if 'carts' not in data:
         data['carts'] = {}
-        
-    user_id_str = str(user_id)
-    if user_id_str not in data['carts']:
-        data['carts'][user_id_str] = []
     
-    data['carts'][user_id_str].append(item)
+    user_key = str(user_id)
+    if user_key not in data['carts']:
+        data['carts'][user_key] = []
     
-    async with aiofiles.open(f"{DATA_DIR}/carts.yaml", "w", encoding="utf-8") as f:
-        await f.write(yaml.dump(data, allow_unicode=True))
+    data['carts'][user_key].append(item)
+    save_yaml('carts.yaml', data)
 
-async def remove_from_cart(user_id: int, index: int):
-    # Удалить товар из корзины по индексу
-    async with aiofiles.open(f"{DATA_DIR}/carts.yaml", "r", encoding="utf-8") as f:
-        content = await f.read()
-        data = yaml.safe_load(content) or {'carts': {}}
+def remove_from_cart(user_id, index):
+    """Удалить товар из корзины"""
+    data = load_yaml('carts.yaml')
+    carts = data.get('carts', {})
+    user_key = str(user_id)
     
-    user_id_str = str(user_id)
-    if user_id_str in data.get('carts', {}) and 0 <= index < len(data['carts'][user_id_str]):
-        data['carts'][user_id_str].pop(index)
-    
-    async with aiofiles.open(f"{DATA_DIR}/carts.yaml", "w", encoding="utf-8") as f:
-        await f.write(yaml.dump(data, allow_unicode=True))
+    if user_key in carts and 0 <= index < len(carts[user_key]):
+        carts[user_key].pop(index)
+        data['carts'] = carts
+        save_yaml('carts.yaml', data)
 
-async def clear_cart(user_id: int):
-    # Очистить всю корзину пользователя
-    async with aiofiles.open(f"{DATA_DIR}/carts.yaml", "r", encoding="utf-8") as f:
-        content = await f.read()
-        data = yaml.safe_load(content) or {'carts': {}}
-    
-    user_id_str = str(user_id)
-    if 'carts' in data:
-        data['carts'][user_id_str] = []
-    
-    async with aiofiles.open(f"{DATA_DIR}/carts.yaml", "w", encoding="utf-8") as f:
-        await f.write(yaml.dump(data, allow_unicode=True))
+def clear_cart(user_id):
+    """Очистить корзину"""
+    data = load_yaml('carts.yaml')
+    carts = data.get('carts', {})
+    carts[str(user_id)] = []
+    data['carts'] = carts
+    save_yaml('carts.yaml', data)
 
 # ============ ИЗБРАННОЕ ============
 
-async def get_favorites(user_id: int) -> List[str]:
-    # Получить список ID избранных букетов
-    async with aiofiles.open(f"{DATA_DIR}/favorites.yaml", "r", encoding="utf-8") as f:
-        content = await f.read()
-        data = yaml.safe_load(content) or {'favorites': {}}
-        return data.get('favorites', {}).get(str(user_id), [])
+def get_favorites(user_id):
+    """Получить избранное"""
+    data = load_yaml('favorites.yaml')
+    favs = data.get('favorites', {})
+    return favs.get(str(user_id), [])
 
-async def toggle_favorite(user_id: int, bouquet_id: str):
-    # Добавить или убрать букет из избранного
-    async with aiofiles.open(f"{DATA_DIR}/favorites.yaml", "r", encoding="utf-8") as f:
-        content = await f.read()
-        data = yaml.safe_load(content) or {'favorites': {}}
-    
+def toggle_favorite(user_id, bouquet_id):
+    """Добавить/удалить из избранного"""
+    data = load_yaml('favorites.yaml')
     if 'favorites' not in data:
         data['favorites'] = {}
-        
-    user_id_str = str(user_id)
-    if user_id_str not in data['favorites']:
-        data['favorites'][user_id_str] = []
     
-    if bouquet_id in data['favorites'][user_id_str]:
-        data['favorites'][user_id_str].remove(bouquet_id)
+    user_key = str(user_id)
+    if user_key not in data['favorites']:
+        data['favorites'][user_key] = []
+    
+    if bouquet_id in data['favorites'][user_key]:
+        data['favorites'][user_key].remove(bouquet_id)
     else:
-        data['favorites'][user_id_str].append(bouquet_id)
+        data['favorites'][user_key].append(bouquet_id)
     
-    async with aiofiles.open(f"{DATA_DIR}/favorites.yaml", "w", encoding="utf-8") as f:
-        await f.write(yaml.dump(data, allow_unicode=True))
+    save_yaml('favorites.yaml', data)
 
 # ============ ЗАКАЗЫ ============
 
-async def create_order(user_id: int, user_name: str) -> str:
-    # Создать новый заказ на основе корзины
-    cart = await get_user_cart(user_id)
-    
-    order_id = f"order_{int(datetime.now().timestamp())}"
+def create_order(user_id, user_name, items):
+    """Создать заказ"""
+    data = load_yaml('orders.yaml')
+    if 'orders' not in data:
+        data['orders'] = []
     
     order = {
-        'order_id': order_id,
+        'order_id': f"order_{int(datetime.now().timestamp())}",
         'user_id': user_id,
         'user_name': user_name,
         'created_at': datetime.now().isoformat(),
-        'items': cart,
-        'total_order_price': sum(item['total_price'] for item in cart),
-        'payment_status': 'pending'
+        'items': items,
+        'total_price': sum(item.get('total_price', 0) for item in items),
+        'status': 'pending'
     }
     
-    async with aiofiles.open(f"{DATA_DIR}/orders.yaml", "r", encoding="utf-8") as f:
-        content = await f.read()
-        data = yaml.safe_load(content) or {'orders': []}
-    
-    if 'orders' not in data:
-        data['orders'] = []
-        
     data['orders'].append(order)
-    
-    async with aiofiles.open(f"{DATA_DIR}/orders.yaml", "w", encoding="utf-8") as f:
-        await f.write(yaml.dump(data, allow_unicode=True))
-    
-    # Обновляем статистику пользователя
-    await update_user_stats(user_id, user_name, order['total_order_price'])
-    
-    return order_id
+    save_yaml('orders.yaml', data)
+    return order['order_id']
 
-async def get_user_orders(user_id: int) -> List[Dict]:
-    # Получить историю заказов пользователя
-    async with aiofiles.open(f"{DATA_DIR}/orders.yaml", "r", encoding="utf-8") as f:
-        content = await f.read()
-        data = yaml.safe_load(content) or {'orders': []}
-        return [o for o in data.get('orders', []) if o['user_id'] == user_id]
+def get_user_orders(user_id):
+    """Получить заказы пользователя"""
+    data = load_yaml('orders.yaml')
+    orders = data.get('orders', [])
+    return [o for o in orders if o['user_id'] == user_id]
 
-async def get_all_orders(limit: int = 50) -> List[Dict]:
-    # Получить все заказы (для админа)
-    async with aiofiles.open(f"{DATA_DIR}/orders.yaml", "r", encoding="utf-8") as f:
-        content = await f.read()
-        data = yaml.safe_load(content) or {'orders': []}
-        return data.get('orders', [])[-limit:]
-
-async def update_order_status(order_id: str, status: str):
-    # Обновить статус оплаты заказа
-    async with aiofiles.open(f"{DATA_DIR}/orders.yaml", "r", encoding="utf-8") as f:
-        content = await f.read()
-        data = yaml.safe_load(content) or {'orders': []}
-    
-    for order in data.get('orders', []):
-        if order['order_id'] == order_id:
-            order['payment_status'] = status
-            break
-            
-    async with aiofiles.open(f"{DATA_DIR}/orders.yaml", "w", encoding="utf-8") as f:
-        await f.write(yaml.dump(data, allow_unicode=True))
-
-# ============ ПОЛЬЗОВАТЕЛИ ============
-
-async def update_user_stats(user_id: int, username: str, amount: int):
-    # Обновить статистику пользователя после заказа
-    async with aiofiles.open(f"{DATA_DIR}/users.yaml", "r", encoding="utf-8") as f:
-        content = await f.read()
-        data = yaml.safe_load(content) or {'users': []}
-    
-    if 'users' not in data:
-        data['users'] = []
-        
-    user_found = False
-    for user in data['users']:
-        if user['user_id'] == user_id:
-            user['total_orders'] += 1
-            user['total_spent'] += amount
-            user_found = True
-            break
-            
-    if not user_found:
-        data['users'].append({
-            'user_id': user_id,
-            'username': username,
-            'registered_at': datetime.now().isoformat(),
-            'total_orders': 1,
-            'total_spent': amount
-        })
-        
-    async with aiofiles.open(f"{DATA_DIR}/users.yaml", "w", encoding="utf-8") as f:
-        await f.write(yaml.dump(data, allow_unicode=True))
-
-async def ensure_user_exists(user_id: int, username: str, first_name: str, last_name: str = ""):
-
-    file_path = f"{DATA_DIR}/users.yaml"
-
-    # 1. Проверяем, существует ли папка data. Если нет — создаем.
-    if not os.path.exists(DATA_DIR):
-        os.makedirs(DATA_DIR)
-
-    # 2. Проверяем, существует ли файл users.yaml. Если нет — создаем пустой.
-    if not os.path.exists(file_path):
-        async with aiofiles.open(file_path, "w", encoding="utf-8") as f:
-            await f.write(yaml.dump({'users': []}))
-
-    # 3. Теперь, когда файл точно есть, открываем его для чтения (твоя 271 строка)
-    async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
-        content = await f.read()
-        data = yaml.safe_load(content) or {'users': []}
-        
-    # Проверить существование пользователя и добавить если нет
-    async with aiofiles.open(f"{DATA_DIR}/users.yaml", "r", encoding="utf-8") as f:
-        content = await f.read()
-        data = yaml.safe_load(content) or {'users': []}
-        
-    if 'users' not in data:
-        data['users'] = []
-    
-    if not any(u['user_id'] == user_id for u in data['users']):
-        data['users'].append({
-            'user_id': user_id,
-            'username': username,
-            'first_name': first_name,
-            'last_name': last_name,
-            'registered_at': datetime.now().isoformat(),
-            'total_orders': 0,
-            'total_spent': 0
-        })
-        
-        async with aiofiles.open(f"{DATA_DIR}/users.yaml", "w", encoding="utf-8") as f:
-            await f.write(yaml.dump(data, allow_unicode=True))
+def get_all_orders():
+    """Получить все заказы"""
+    data = load_yaml('orders.yaml')
+    return data.get('orders', [])
 
 # ============ АДМИНЫ ============
 
-async def is_admin(user_id: int) -> bool:
-    # Проверка прав администратора
-    async with aiofiles.open(f"{DATA_DIR}/admins.yaml", "r", encoding="utf-8") as f:
-        content = await f.read()
-        data = yaml.safe_load(content)
-        return user_id in data.get('admins', [])
+def is_admin(user_id):
+    """Проверить админа"""
+    data = load_yaml('admins.yaml')
+    admins = data.get('admins', [])
+    return user_id in admins
 
-# ============ СТАТИСТИКА ============
+# ============ ПОЛЬЗОВАТЕЛИ ============
 
-async def get_statistics() -> Dict:
-    # Сбор общей статистики для админ-панели
-    # Пользователи
-    async with aiofiles.open(f"{DATA_DIR}/users.yaml", "r", encoding="utf-8") as f:
-        content = await f.read()
-        users_data = yaml.safe_load(content) or {'users': []}
-        total_users = len(users_data.get('users', []))
+def save_user(user_id, username, first_name, last_name=""):
+    """Сохранить пользователя"""
+    data = load_yaml('users.yaml')
+    if 'users' not in data:
+        data['users'] = []
     
-    # Заказы
-    async with aiofiles.open(f"{DATA_DIR}/orders.yaml", "r", encoding="utf-8") as f:
-        content = await f.read()
-        orders_data = yaml.safe_load(content) or {'orders': []}
-        orders = orders_data.get('orders', [])
-        
-        total_orders = len(orders)
-        total_revenue = sum(o['total_order_price'] for o in orders)
-        
-        # Сегодняшние заказы
-        today = datetime.now().date()
-        today_orders = [o for o in orders if datetime.fromisoformat(o['created_at']).date() == today]
-        today_count = len(today_orders)
-        today_revenue = sum(o['total_order_price'] for o in today_orders)
+    # Проверяем существует ли
+    for u in data['users']:
+        if u['user_id'] == user_id:
+            return
     
-    # Букеты
-    bouquets = await get_bouquets()
+    user = {
+        'user_id': user_id,
+        'username': username,
+        'first_name': first_name,
+        'last_name': last_name,
+        'registered_at': datetime.now().isoformat()
+    }
+    
+    data['users'].append(user)
+    save_yaml('users.yaml', data)
+
+def get_stats():
+    """Получить статистику"""
+    orders = get_all_orders()
+    bouquets = get_bouquets()
+    users_data = load_yaml('users.yaml')
+    
+    total_orders = len(orders)
+    total_revenue = sum(o['total_price'] for o in orders)
+    total_users = len(users_data.get('users', []))
     total_bouquets = len(bouquets)
-    popular_bouquets = sum(1 for b in bouquets if b['is_popular'])
+    
+    # Сегодняшние заказы
+    today = datetime.now().date()
+    today_orders = [o for o in orders if datetime.fromisoformat(o['created_at']).date() == today]
+    today_count = len(today_orders)
+    today_revenue = sum(o['total_price'] for o in today_orders)
     
     return {
-        'total_users': total_users,
         'total_orders': total_orders,
         'total_revenue': total_revenue,
-        'today_orders': today_count,
-        'today_revenue': today_revenue,
+        'total_users': total_users,
         'total_bouquets': total_bouquets,
-        'popular_bouquets': popular_bouquets
+        'today_orders': today_count,
+        'today_revenue': today_revenue
     }

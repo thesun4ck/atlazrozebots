@@ -1,48 +1,44 @@
-import asyncio
-import logging
-import sys
-from aiogram import Bot, Dispatcher
-from aiogram.client.default import DefaultBotProperties
-from aiogram.enums import ParseMode
-from aiogram.fsm.storage.memory import MemoryStorage
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Atlas Rose Bot - Telegram бот для магазина букетов
+"""
 
+import logging
+from telegram.ext import Application
 from config import BOT_TOKEN
 from handlers import client, admin
 
 # Настройка логирования
 logging.basicConfig(
-    level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    stream=sys.stdout
+    level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
-async def main():
-    # Инициализация бота
-    bot = Bot(
-        token=BOT_TOKEN,
-        default=DefaultBotProperties(parse_mode=ParseMode.HTML)
+def main():
+    """Запуск бота"""
+    logger.info("🌹 Запуск Atlas Rose Bot...")
+    
+    # Создаем приложение
+    application = Application.builder().token(BOT_TOKEN).build()
+    
+    # Регистрируем обработчики клиента
+    client.register_handlers(application)
+    
+    # Регистрируем обработчики админа
+    admin.register_handlers(application)
+    
+    # Запускаем бота
+    logger.info("✅ Бот запущен и готов к работе!")
+    application.run_polling(
+        allowed_updates=["message", "callback_query", "inline_query"],
+        drop_pending_updates=True
     )
-    
-    # Инициализация хранилища состояний (in-memory)
-    storage = MemoryStorage()
-    dp = Dispatcher(storage=storage)
-    
-    # Регистрация роутеров
-    dp.include_router(client.router)
-    dp.include_router(admin.router)
-    
-    # Запуск polling
-    logger.info("Бот запущен и готов к работе!")
-    try:
-        await dp.start_polling(bot)
-    finally:
-        await bot.session.close()
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     try:
-        if sys.platform == 'win32':
-             asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-        asyncio.run(main())
-    except (KeyboardInterrupt, SystemExit):
-        logger.info("Бот остановлен!")
+        main()
+    except Exception as e:
+        logger.error(f"❌ Критическая ошибка: {e}")
+        raise
