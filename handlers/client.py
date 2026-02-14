@@ -31,7 +31,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Каждый букет - это произведение искусства!\n\n"
         "Выберите действие:",
         reply_markup=get_main_menu(),
-        parse_mode='Markdown'
+        parse_mode='MarkdownV2'
     )
 
 async def catalog(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -68,7 +68,7 @@ async def catalog(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     photo=photo,
                     caption=caption,
                     reply_markup=InlineKeyboardMarkup(keyboard),
-                    parse_mode='Markdown'
+                    parse_mode='MarkdownV2'
                 )
         except Exception as e:
             logger.error(f"Photo error: {e}")
@@ -103,7 +103,7 @@ async def start_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.message.reply_text(
         f"*{bouquet['name']}*\n\nВыберите количество роз:",
         reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+        parse_mode='MarkdownV2'
     )
     
     return CHOOSING_QUANTITY
@@ -321,13 +321,13 @@ async def show_summary(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.callback_query.message.reply_text(
             summary,
             reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='Markdown'
+            parse_mode='MarkdownV2'
         )
     else:
         await update.message.reply_text(
             summary,
             reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='Markdown'
+            parse_mode='MarkdownV2'
         )
     
     return ConversationHandler.END
@@ -390,7 +390,7 @@ async def show_cart(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             text,
             reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='Markdown'
+            parse_mode='MarkdownV2'
         )
     
     keyboard = [
@@ -402,7 +402,7 @@ async def show_cart(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         f"*💰 Итого: {total}₽*",
         reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+        parse_mode='MarkdownV2'
     )
 
 async def remove_from_cart(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -443,7 +443,7 @@ async def checkout(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"👤 Flower Shop\n\n"
         f"После оплаты нажмите кнопку:",
         reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+        parse_mode='MarkdownV2'
     )
 
 async def payment_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -457,7 +457,7 @@ async def payment_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.message.edit_text(
         "⏳ *Ожидание подтверждения оплаты...*\n\n"
         "Ваш заказ отправлен менеджеру.",
-        parse_mode='Markdown'
+        parse_mode='MarkdownV2'
     )
     
     # Сохраняем заказ
@@ -494,7 +494,7 @@ async def payment_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ADMIN_ID,
             admin_msg,
             reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='Markdown'
+            parse_mode='MarkdownV2'
         )
     except Exception as e:
         logger.error(f"Failed to notify admin: {e}")
@@ -516,7 +516,7 @@ async def admin_confirm_payment(update: Update, context: ContextTypes.DEFAULT_TY
             user_id,
             f"✅ *Заказ #{order_id} подтвержден!*\n\n"
             f"Оплата получена. Мы приступили к изготовлению вашего букета!",
-            parse_mode='Markdown'
+            parse_mode='MarkdownV2'
         )
     except:
         pass
@@ -540,7 +540,7 @@ async def admin_reject_payment(update: Update, context: ContextTypes.DEFAULT_TYP
             f"❌ *Оплата не подтверждена*\n\n"
             f"Заказ #{order_id}\n"
             f"Оплата не поступила. Проверьте реквизиты и попробуйте снова.",
-            parse_mode='Markdown'
+            parse_mode='MarkdownV2'
         )
     except:
         pass
@@ -582,7 +582,7 @@ async def show_favorites(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         photo=photo,
                         caption=caption,
                         reply_markup=InlineKeyboardMarkup(keyboard),
-                        parse_mode='Markdown'
+                        parse_mode='MarkdownV2'
                     )
             except:
                 pass
@@ -602,7 +602,7 @@ async def show_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"💰 {order['total_price']}₽"
         )
         
-        await update.message.reply_text(text, parse_mode='Markdown')
+        await update.message.reply_text(text, parse_mode='MarkdownV2')
 
 async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Информация"""
@@ -658,5 +658,5 @@ def register_handlers(application):
     application.add_handler(CallbackQueryHandler(checkout, pattern="^checkout$"))
     application.add_handler(CallbackQueryHandler(payment_confirm, pattern="^payment_confirm$"))
     application.add_handler(CallbackQueryHandler(toggle_fav, pattern="^fav:"))
-    application.add_handler(CallbackQueryHandler(admin_confirm_payment, pattern="^admin_confirm:"))
-    application.add_handler(CallbackQueryHandler(admin_reject_payment, pattern="^admin_reject:"))
+    application.add_handler(CallbackQueryHandler(admin_confirm_payment, pattern=r"^admin_confirm:.+"))
+    application.add_handler(CallbackQueryHandler(admin_reject_payment, pattern=r"^admin_reject:.+"))
