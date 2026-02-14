@@ -7,7 +7,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 # States для добавления букета
-ADMIN_NAME, ADMIN_DESC, ADMIN_PRICE, ADMIN_PHOTO, ADMIN_POPULAR = range(5)
+ADMIN_NAME, ADMIN_PRICE, ADMIN_PHOTO, ADMIN_POPULAR = range(4)
 
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Админ панель"""
@@ -96,8 +96,7 @@ async def show_admin_bouquets(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     for bouquet in bouquets:
         text = (
-            f"{'🔥 ' if bouquet.get('is_popular') else ''}*{bouquet['name']}*\n"
-            f"{bouquet['description']}\n\n"
+            f"{'🔥 ' if bouquet.get('is_popular') else ''}*{bouquet['name']}*\n\n"
             f"💰 {bouquet['base_price']}₽"
         )
         
@@ -122,11 +121,6 @@ async def show_admin_bouquets(update: Update, context: ContextTypes.DEFAULT_TYPE
                 )
         except Exception as e:
             logger.error(f"Photo error: {e}")
-            await query.message.reply_text(
-                text,
-                reply_markup=InlineKeyboardMarkup(keyboard),
-                parse_mode='Markdown'
-            )
     
     keyboard = [[InlineKeyboardButton("◀️ Назад", callback_data="admin_back")]]
     await query.message.reply_text(
@@ -164,7 +158,7 @@ async def delete_bouquet_confirm(update: Update, context: ContextTypes.DEFAULT_T
     ]
     
     await query.message.edit_caption(
-        caption="⚠️ Вы уверены что хотите удалить этот букет?\nЭто действие нельзя отменить!",
+        caption="⚠️ Вы уверены что хотите удалить этот букет?",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
@@ -178,8 +172,7 @@ async def delete_bouquet_confirmed(update: Update, context: ContextTypes.DEFAULT
     
     await query.message.delete()
 
-# ========== ДОБАВЛЕНИЕ БУКЕТА ==========
-
+# ДОБАВЛЕНИЕ БУКЕТА
 async def start_add_bouquet(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Начать добавление букета"""
     query = update.callback_query
@@ -189,7 +182,7 @@ async def start_add_bouquet(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await query.message.reply_text(
         "➕ *Добавление нового букета*\n\n"
-        "Шаг 1/4: Введите название букета:",
+        "Шаг 1/3: Введите название букета:",
         parse_mode='Markdown'
     )
     
@@ -202,19 +195,7 @@ async def admin_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(
         f"✅ Название: {name}\n\n"
-        "Шаг 2/4: Введите описание букета:"
-    )
-    
-    return ADMIN_DESC
-
-async def admin_desc(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Получить описание"""
-    desc = update.message.text
-    context.user_data['new_bouquet']['description'] = desc
-    
-    await update.message.reply_text(
-        f"✅ Описание: {desc}\n\n"
-        "Шаг 3/4: Введите базовую цену (только число):"
+        "Шаг 2/3: Введите базовую цену (только число):"
     )
     
     return ADMIN_PRICE
@@ -227,7 +208,7 @@ async def admin_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         await update.message.reply_text(
             f"✅ Цена: {price}₽\n\n"
-            "Шаг 4/4: Отправьте фото букета:"
+            "Шаг 3/3: Отправьте фото букета:"
         )
         
         return ADMIN_PHOTO
@@ -252,8 +233,18 @@ async def admin_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     file = await context.bot.get_file(photo.file_id)
     
     # Генерируем имя файла
-    bouquet_id = f"b{len(db.get_bouquets()) + 1}"
-    filename = f"images/{bouquet_id}.jpg"
+    all_bouquets = db.get_bouquets()
+    max_id = 0
+    for b in all_bouquets:
+        try:
+            bid = int(b['id'].replace('b', ''))
+            if bid > max_id:
+                max_id = bid
+        except:
+            pass
+    
+    new_id = max_id + 1
+    filename = f"images/b{new_id}.jpg"
     
     await file.download_to_drive(filename)
     
@@ -283,9 +274,8 @@ async def admin_popular(update: Update, context: ContextTypes.DEFAULT_TYPE):
     is_popular = query.data.split(":")[1] == "yes"
     context.user_data['new_bouquet']['is_popular'] = is_popular
     
-    # Добавляем остальные поля по умолчанию
+    # Добавляем остальные поля
     bouquet_data = context.user_data['new_bouquet']
-    bouquet_data['colors'] = ["pink", "red", "blue", "white", "mix"]
     bouquet_data['quantities'] = [
         {"value": 15, "multiplier": 0.6},
         {"value": 25, "multiplier": 1.0},
@@ -305,6 +295,7 @@ async def admin_popular(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"✅ *Букет добавлен!*\n\n"
         f"🌹 {bouquet_data['name']}\n"
         f"💰 {bouquet_data['base_price']}₽\n"
+        f"ID: {bouquet_id}\n"
         f"{'🔥 Популярный' if is_popular else ''}",
         parse_mode='Markdown'
     )
@@ -355,7 +346,6 @@ def register_handlers(application):
         entry_points=[CallbackQueryHandler(start_add_bouquet, pattern="^admin_add$")],
         states={
             ADMIN_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_name)],
-            ADMIN_DESC: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_desc)],
             ADMIN_PRICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_price)],
             ADMIN_PHOTO: [MessageHandler(filters.PHOTO, admin_photo)],
             ADMIN_POPULAR: [CallbackQueryHandler(admin_popular, pattern="^popular:")]

@@ -1,23 +1,22 @@
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, ReplyKeyboardRemove
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
 from telegram.ext import ContextTypes, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ConversationHandler
 from database import db
-from config import CONTACT_USERNAME
+from config import CONTACT_USERNAME, ADMIN_ID
 import logging
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
-# States для ConversationHandler
-(CHOOSING_COLOR, CHOOSING_QUANTITY, CHOOSING_PACKAGING, 
- CHOOSING_EXTRAS, CARD_TEXT, CHOOSING_DATE, CHOOSING_TIME,
- CHOOSING_PICKUP, ENTERING_ADDRESS) = range(9)
+# States
+(CHOOSING_QUANTITY, CHOOSING_PACKAGING, CHOOSING_EXTRAS, 
+ CARD_TEXT, CHOOSING_DATE, CHOOSING_TIME, CHOOSING_PICKUP, ENTERING_ADDRESS) = range(8)
 
 def get_main_menu():
     """Главное меню"""
     keyboard = [
         ["🌹 Каталог", "🛒 Корзина"],
         ["⭐️ Избранное", "📦 Мои заказы"],
-        ["ℹ️ Информация"]
+        ["💬 Связаться со мной"]
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
@@ -28,8 +27,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(
         "🌹 *Добро пожаловать в Flower Shop!*\n\n"
-        "Мы создаем уникальные букеты из атласных роз ручной работы\\.\n"
-        "Каждый букет \\- это произведение искусства\\!\n\n"
+        "Мы создаем уникальные букеты из атласных роз ручной работы.\n"
+        "Каждый букет - это произведение искусства!\n\n"
         "Выберите действие:",
         reply_markup=get_main_menu(),
         parse_mode='Markdown'
@@ -40,17 +39,19 @@ async def catalog(update: Update, context: ContextTypes.DEFAULT_TYPE):
     bouquets = db.get_bouquets()
     
     if not bouquets:
-        await update.message.reply_text("Каталог пуст")
+        await update.message.reply_text(
+            f"На данный момент каталог пуст, но можете написать и уточнить информацию @{CONTACT_USERNAME}"
+        )
         return
     
     favorites = db.get_favorites(update.effective_user.id)
     
     for bouquet in bouquets:
         is_fav = bouquet['id'] in favorites
+        # БЕЗ описания, только название и цена
         caption = (
             f"{'🔥 ' if bouquet.get('is_popular') else ''}"
             f"*{bouquet['name']}*\n\n"
-            f"{bouquet['description']}\n\n"
             f"💰 Цена от: *{bouquet['base_price']}₽*"
         )
         
@@ -71,7 +72,6 @@ async def catalog(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
         except Exception as e:
             logger.error(f"Photo error: {e}")
-            await update.message.reply_text(caption, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
 
 async def start_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Начать заказ"""
@@ -88,37 +88,7 @@ async def start_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['bouquet'] = bouquet
     context.user_data['order'] = {}
     
-    # Шаг 1: Цвет
-    color_emoji = {"pink": "🩷", "red": "❤️", "blue": "💙", "white": "🤍", "mix": "🌈"}
-    color_name = {"pink": "Розовый", "red": "Красный", "blue": "Синий", "white": "Белый", "mix": "Микс"}
-    
-    keyboard = []
-    for color in bouquet.get('colors', []):
-        keyboard.append([InlineKeyboardButton(
-            f"{color_emoji.get(color, '')} {color_name.get(color, color)}",
-            callback_data=f"color:{color}"
-        )])
-    keyboard.append([InlineKeyboardButton("❌ Отмена", callback_data="cancel")])
-    
-    await query.message.reply_text(
-        f"*{bouquet['name']}*\n\nВыберите цвет роз:",
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
-    )
-    
-    return CHOOSING_COLOR
-
-async def choose_color(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Выбор цвета"""
-    query = update.callback_query
-    await query.answer()
-    
-    color = query.data.split(":")[1]
-    context.user_data['order']['color'] = color
-    
-    bouquet = context.user_data['bouquet']
-    
-    # Шаг 2: Количество
+    # Сразу количество (БЕЗ цвета)
     keyboard = []
     for qty in bouquet.get('quantities', []):
         val = qty['value']
@@ -128,11 +98,12 @@ async def choose_color(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"{val} роз - {price}₽",
             callback_data=f"qty:{val}:{price}"
         )])
-    keyboard.append([InlineKeyboardButton("◀️ Назад", callback_data="back_color")])
+    keyboard.append([InlineKeyboardButton("❌ Отмена", callback_data="cancel")])
     
-    await query.message.edit_text(
-        "Выберите количество роз:",
-        reply_markup=InlineKeyboardMarkup(keyboard)
+    await query.message.reply_text(
+        f"*{bouquet['name']}*\n\nВыберите количество роз:",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
     )
     
     return CHOOSING_QUANTITY
@@ -148,14 +119,13 @@ async def choose_quantity(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     bouquet = context.user_data['bouquet']
     
-    # Шаг 3: Упаковка
+    # Упаковка
     keyboard = []
     for pkg in bouquet.get('packaging', []):
         label = pkg['name']
         if pkg['price'] > 0:
             label += f" (+{pkg['price']}₽)"
         keyboard.append([InlineKeyboardButton(label, callback_data=f"pkg:{pkg['type']}:{pkg['price']}")])
-    keyboard.append([InlineKeyboardButton("◀️ Назад", callback_data="back_qty")])
     
     await query.message.edit_text(
         "Выберите упаковку:",
@@ -172,12 +142,11 @@ async def choose_packaging(update: Update, context: ContextTypes.DEFAULT_TYPE):
     _, pkg_type, pkg_price = query.data.split(":")
     context.user_data['order']['packaging'] = {'type': pkg_type, 'price': int(pkg_price)}
     
-    # Шаг 4: Дополнительные услуги
+    # Дополнительные услуги
     keyboard = [
-        [InlineKeyboardButton("⚡️ Срочно за 1 день (+1000₽)", callback_data="extra:urgent:1000")],
-        [InlineKeyboardButton("💌 Открытка (+100₽)", callback_data="extra:card:100")],
-        [InlineKeyboardButton("✅ Продолжить без допов", callback_data="extra:none:0")],
-        [InlineKeyboardButton("◀️ Назад", callback_data="back_pkg")]
+        [InlineKeyboardButton("⚡️ Срочно за 1 день (+1000₽)", callback_data="extra:urgent")],
+        [InlineKeyboardButton("💌 Открытка (+100₽)", callback_data="extra:card")],
+        [InlineKeyboardButton("✅ Продолжить", callback_data="extra:none")]
     ]
     
     await query.message.edit_text(
@@ -192,7 +161,7 @@ async def choose_extras(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
-    _, extra_type, price = query.data.split(":")
+    extra_type = query.data.split(":")[1]
     
     if 'extras' not in context.user_data['order']:
         context.user_data['order']['extras'] = {}
@@ -206,34 +175,41 @@ async def choose_extras(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return CARD_TEXT
     else:
         # Переходим к дате
-        today = datetime.now()
-        keyboard = []
-        for i in range(7):
-            date = today + timedelta(days=i)
-            label = "Сегодня" if i == 0 else "Завтра" if i == 1 else date.strftime("%d.%m")
-            keyboard.append([InlineKeyboardButton(label, callback_data=f"date:{date.strftime('%Y-%m-%d')}")])
-        
-        await query.message.edit_text(
-            "На какую дату нужен букет?",
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
-        
-        return CHOOSING_DATE
+        return await show_date_selection(query, context)
 
 async def card_text_entered(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Текст открытки введен"""
+    """Текст открытки"""
     text = update.message.text[:200]
     context.user_data['order']['extras']['card_text'] = text
     
-    # Переходим к дате
-    today = datetime.now()
-    keyboard = []
-    for i in range(7):
-        date = today + timedelta(days=i)
-        label = "Сегодня" if i == 0 else "Завтра" if i == 1 else date.strftime("%d.%m")
-        keyboard.append([InlineKeyboardButton(label, callback_data=f"date:{date.strftime('%Y-%m-%d')}")])
+    # Создаём fake query для show_date_selection
+    class FakeQuery:
+        def __init__(self, msg):
+            self.message = msg
+        async def answer(self): pass
+        async def edit_text(self, *args, **kwargs):
+            return await self.message.reply_text(*args, **kwargs)
     
-    await update.message.reply_text(
+    fake_query = FakeQuery(update.message)
+    return await show_date_selection(fake_query, context)
+
+async def show_date_selection(query, context):
+    """Показать выбор даты"""
+    quantity = context.user_data['order']['quantity']
+    today = datetime.now()
+    
+    # Если > 51 - минимум +4 дня, иначе +2
+    start_day = 4 if quantity > 51 else 2
+    
+    keyboard = []
+    for i in range(start_day, start_day + 7):
+        date = today + timedelta(days=i)
+        keyboard.append([InlineKeyboardButton(
+            date.strftime("%d.%m"),
+            callback_data=f"date:{date.strftime('%Y-%m-%d')}"
+        )])
+    
+    await query.message.reply_text(
         "На какую дату нужен букет?",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
@@ -248,11 +224,13 @@ async def choose_date(update: Update, context: ContextTypes.DEFAULT_TYPE):
     date = query.data.split(":")[1]
     context.user_data['order']['date'] = date
     
-    # Шаг: Время
+    # Время (с 12:00)
     keyboard = [
-        [InlineKeyboardButton("10:00", callback_data="time:10:00"), InlineKeyboardButton("12:00", callback_data="time:12:00")],
-        [InlineKeyboardButton("14:00", callback_data="time:14:00"), InlineKeyboardButton("16:00", callback_data="time:16:00")],
-        [InlineKeyboardButton("18:00", callback_data="time:18:00"), InlineKeyboardButton("20:00", callback_data="time:20:00")]
+        [InlineKeyboardButton("12:00", callback_data="time:12:00"), 
+         InlineKeyboardButton("14:00", callback_data="time:14:00")],
+        [InlineKeyboardButton("16:00", callback_data="time:16:00"), 
+         InlineKeyboardButton("18:00", callback_data="time:18:00")],
+        [InlineKeyboardButton("20:00", callback_data="time:20:00")]
     ]
     
     await query.message.edit_text(
@@ -270,7 +248,7 @@ async def choose_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
     time = query.data.split(":")[1] + ":" + query.data.split(":")[2]
     context.user_data['order']['time'] = time
     
-    # Шаг: Способ получения
+    # Способ получения
     keyboard = [
         [InlineKeyboardButton("🏠 Самовывоз", callback_data="pickup:self")],
         [InlineKeyboardButton("📍 Встреча в городе", callback_data="pickup:meeting")]
@@ -325,7 +303,6 @@ async def show_summary(update: Update, context: ContextTypes.DEFAULT_TYPE):
     summary = (
         f"*📋 Ваш заказ:*\n\n"
         f"🌹 {bouquet['name']}\n"
-        f"🎨 Цвет: {order['color']}\n"
         f"🔢 Количество: {order['quantity']} роз\n"
         f"📦 Упаковка: {order['packaging']['type']}\n"
         f"{extras_text}"
@@ -340,7 +317,6 @@ async def show_summary(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("❌ Отмена", callback_data="cancel")]
     ]
     
-    # Определяем тип update
     if update.callback_query:
         await update.callback_query.message.reply_text(
             summary,
@@ -357,9 +333,9 @@ async def show_summary(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 async def confirm_add_to_cart(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Подтверждение добавления в корзину"""
+    """Добавить в корзину"""
     query = update.callback_query
-    await query.answer("Добавлено в корзину!")
+    await query.answer("Добавлено!")
     
     bouquet = context.user_data['bouquet']
     order = context.user_data['order']
@@ -367,7 +343,6 @@ async def confirm_add_to_cart(update: Update, context: ContextTypes.DEFAULT_TYPE
     item = {
         'bouquet_id': bouquet['id'],
         'bouquet_name': bouquet['name'],
-        'color': order['color'],
         'quantity': order['quantity'],
         'packaging': order['packaging'],
         'extras': order.get('extras', {}),
@@ -379,12 +354,11 @@ async def confirm_add_to_cart(update: Update, context: ContextTypes.DEFAULT_TYPE
     }
     
     db.add_to_cart(update.effective_user.id, item)
-    
     await query.message.edit_text("✅ Товар добавлен в корзину!")
     context.user_data.clear()
 
 async def show_cart(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показать корзину"""
+    """Корзина"""
     cart = db.get_user_cart(update.effective_user.id)
     
     if not cart:
@@ -405,7 +379,7 @@ async def show_cart(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         text = (
             f"🌹 *{item['bouquet_name']}*\n"
-            f"🎨 {item['color']} • {item['quantity']} роз{extras_text}\n"
+            f"🔢 {item['quantity']} роз{extras_text}\n"
             f"📅 {item['date']} {item['time']}\n"
             f"📍 {item['pickup']}: {item['address']}\n"
             f"💰 {item['total_price']}₽"
@@ -422,7 +396,7 @@ async def show_cart(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [InlineKeyboardButton("💳 Оплатить", callback_data="checkout")],
         [InlineKeyboardButton("💬 Связаться", url=f"https://t.me/{CONTACT_USERNAME}")],
-        [InlineKeyboardButton("🗑 Очистить корзину", callback_data="clear_cart")]
+        [InlineKeyboardButton("🗑 Очистить", callback_data="clear_cart")]
     ]
     
     await update.message.reply_text(
@@ -438,7 +412,6 @@ async def remove_from_cart(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     index = int(query.data.split(":")[1])
     db.remove_from_cart(update.effective_user.id, index)
-    
     await query.message.edit_text("🗑 Товар удален")
 
 async def clear_cart_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -476,39 +449,113 @@ async def checkout(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def payment_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Подтверждение оплаты"""
     query = update.callback_query
-    await query.answer("Заказ оформлен!")
     
     user = update.effective_user
     cart = db.get_user_cart(user.id)
     
-    order_id = db.create_order(user.id, user.full_name, cart)
-    db.clear_cart(user.id)
-    
+    # Показываем "Ожидание оплаты"
     await query.message.edit_text(
-        f"✅ *Заказ #{order_id} оформлен!*\n\n"
-        f"Спасибо! Мы свяжемся с вами.",
+        "⏳ *Ожидание подтверждения оплаты...*\n\n"
+        "Ваш заказ отправлен менеджеру.",
         parse_mode='Markdown'
     )
     
-    # Уведомление админу
-    from config import ADMIN_ID
+    # Сохраняем заказ
+    order_id = db.create_order(user.id, user.full_name, cart)
+    
+    # Формируем сообщение для админа
+    items_text = "\n".join([
+        f"🌹 {item['bouquet_name']} ({item['quantity']} шт) - {item['total_price']}₽"
+        for item in cart
+    ])
+    
+    total = sum(item['total_price'] for item in cart)
+    username_tag = f"@{user.username}" if user.username else user.full_name
+    
+    admin_msg = (
+        f"🔔 *Новый заказ!*\n\n"
+        f"Заказ #{order_id}\n"
+        f"От: {username_tag}\n\n"
+        f"{items_text}\n\n"
+        f"💰 *Итого: {total}₽*\n\n"
+        f"Пришло ли поступление?"
+    )
+    
+    keyboard = [
+        [
+            InlineKeyboardButton("✅ Да, оплачено", callback_data=f"admin_confirm:{order_id}:{user.id}"),
+            InlineKeyboardButton("❌ Нет", callback_data=f"admin_reject:{order_id}:{user.id}")
+        ]
+    ]
+    
+    # Отправляем админу
     try:
         await context.bot.send_message(
             ADMIN_ID,
-            f"🔔 *Новый заказ!*\n\nЗаказ #{order_id}\nОт: {user.full_name}",
+            admin_msg,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+    except Exception as e:
+        logger.error(f"Failed to notify admin: {e}")
+
+async def admin_confirm_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Админ подтверждает оплату"""
+    query = update.callback_query
+    await query.answer("Подтверждено")
+    
+    _, order_id, user_id = query.data.split(":")
+    user_id = int(user_id)
+    
+    # Очищаем корзину
+    db.clear_cart(user_id)
+    
+    # Уведомляем пользователя
+    try:
+        await context.bot.send_message(
+            user_id,
+            f"✅ *Заказ #{order_id} подтвержден!*\n\n"
+            f"Оплата получена. Мы приступили к изготовлению вашего букета!",
             parse_mode='Markdown'
         )
     except:
         pass
+    
+    await query.message.edit_text(
+        f"✅ Заказ #{order_id} подтвержден\nПользователь уведомлен"
+    )
+
+async def admin_reject_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Админ отклоняет оплату"""
+    query = update.callback_query
+    await query.answer("Отклонено")
+    
+    _, order_id, user_id = query.data.split(":")
+    user_id = int(user_id)
+    
+    # Уведомляем пользователя
+    try:
+        await context.bot.send_message(
+            user_id,
+            f"❌ *Оплата не подтверждена*\n\n"
+            f"Заказ #{order_id}\n"
+            f"Оплата не поступила. Проверьте реквизиты и попробуйте снова.",
+            parse_mode='Markdown'
+        )
+    except:
+        pass
+    
+    await query.message.edit_text(
+        f"❌ Заказ #{order_id} отклонен\nПользователь уведомлен"
+    )
 
 async def toggle_fav(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Переключить избранное"""
+    """Избранное"""
     query = update.callback_query
     
     bouquet_id = query.data.split(":")[1]
     db.toggle_favorite(update.effective_user.id, bouquet_id)
     
-    # Обновляем кнопку
     favorites = db.get_favorites(update.effective_user.id)
     is_fav = bouquet_id in favorites
     
@@ -538,10 +585,10 @@ async def show_favorites(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         parse_mode='Markdown'
                     )
             except:
-                await update.message.reply_text(caption, parse_mode='Markdown')
+                pass
 
 async def show_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показать заказы"""
+    """Показать заказы (БЕЗ кнопки Детали и статуса)"""
     orders = db.get_user_orders(update.effective_user.id)
     
     if not orders:
@@ -552,27 +599,19 @@ async def show_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text = (
             f"📦 *Заказ #{order['order_id']}*\n"
             f"📅 {order['created_at'][:16]}\n"
-            f"💰 {order['total_price']}₽\n"
-            f"Статус: {'⏳ В обработке' if order['status'] == 'pending' else '✅ Выполнен'}"
+            f"💰 {order['total_price']}₽"
         )
         
-        keyboard = [[InlineKeyboardButton("📋 Детали", callback_data=f"order_details:{order['order_id']}")]]
-        
-        await update.message.reply_text(
-            text,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='Markdown'
-        )
+        await update.message.reply_text(text, parse_mode='Markdown')
 
 async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Информация"""
     text = (
-        "*ℹ️ Информация*\n\n"
-        "🌹 Flower Shop - магазин букетов ручной работы\n\n"
-        f"📞 Telegram: @{CONTACT_USERNAME}\n"
-        "⏰ Работаем 24/7"
+        "📞 Telegram: @thesun4ck\n"
+        "⏰ 12:00 - 21:00\n"
+        "🌐 ТГК: https://t.me/satinflowersali"
     )
-    await update.message.reply_text(text, parse_mode='Markdown')
+    await update.message.reply_text(text)
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Отмена"""
@@ -586,22 +625,19 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 def register_handlers(application):
-    """Регистрация обработчиков"""
-    # Команды
+    """Регистрация"""
     application.add_handler(CommandHandler("start", start))
     
-    # Главное меню
     application.add_handler(MessageHandler(filters.Regex("🌹 Каталог"), catalog))
     application.add_handler(MessageHandler(filters.Regex("🛒 Корзина"), show_cart))
     application.add_handler(MessageHandler(filters.Regex("⭐️ Избранное"), show_favorites))
     application.add_handler(MessageHandler(filters.Regex("📦 Мои заказы"), show_orders))
-    application.add_handler(MessageHandler(filters.Regex("ℹ️ Информация"), info))
+    application.add_handler(MessageHandler(filters.Regex("💬 Связаться со мной"), info))
     
-    # ConversationHandler для заказа
+    # ConversationHandler
     conv_handler = ConversationHandler(
         entry_points=[CallbackQueryHandler(start_order, pattern="^order:")],
         states={
-            CHOOSING_COLOR: [CallbackQueryHandler(choose_color, pattern="^color:")],
             CHOOSING_QUANTITY: [CallbackQueryHandler(choose_quantity, pattern="^qty:")],
             CHOOSING_PACKAGING: [CallbackQueryHandler(choose_packaging, pattern="^pkg:")],
             CHOOSING_EXTRAS: [CallbackQueryHandler(choose_extras, pattern="^extra:")],
@@ -616,10 +652,11 @@ def register_handlers(application):
     
     application.add_handler(conv_handler)
     
-    # Callback handlers
     application.add_handler(CallbackQueryHandler(confirm_add_to_cart, pattern="^confirm_cart$"))
     application.add_handler(CallbackQueryHandler(remove_from_cart, pattern="^remove:"))
     application.add_handler(CallbackQueryHandler(clear_cart_handler, pattern="^clear_cart$"))
     application.add_handler(CallbackQueryHandler(checkout, pattern="^checkout$"))
     application.add_handler(CallbackQueryHandler(payment_confirm, pattern="^payment_confirm$"))
     application.add_handler(CallbackQueryHandler(toggle_fav, pattern="^fav:"))
+    application.add_handler(CallbackQueryHandler(admin_confirm_payment, pattern="^admin_confirm:"))
+    application.add_handler(CallbackQueryHandler(admin_reject_payment, pattern="^admin_reject:"))
