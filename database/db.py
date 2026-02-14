@@ -268,7 +268,6 @@ async def update_user_stats(user_id: int, username: str, amount: int):
 
 async def ensure_user_exists(user_id: int, username: str, first_name: str, last_name: str = ""):
 
-    async def ensure_user_exists(user_id: int, username: str, first_name: str, last_name: str = ""):
     file_path = f"{DATA_DIR}/users.yaml"
 
     # 1. Проверяем, существует ли папка data. Если нет — создаем.
