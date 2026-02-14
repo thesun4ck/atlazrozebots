@@ -63,8 +63,7 @@ bouquets:
         price: 500
 
   - id: "b3"
-    name: "Белые облака"
-    description: "Воздушный букет из белоснежных роз"
+    name: "Красные розы"
     base_price: 4000
     image_path: "images/3.jpg"
     is_popular: true
