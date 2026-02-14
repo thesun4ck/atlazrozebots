@@ -267,6 +267,24 @@ async def update_user_stats(user_id: int, username: str, amount: int):
         await f.write(yaml.dump(data, allow_unicode=True))
 
 async def ensure_user_exists(user_id: int, username: str, first_name: str, last_name: str = ""):
+
+    async def ensure_user_exists(user_id: int, username: str, first_name: str, last_name: str = ""):
+    file_path = f"{DATA_DIR}/users.yaml"
+
+    # 1. Проверяем, существует ли папка data. Если нет — создаем.
+    if not os.path.exists(DATA_DIR):
+        os.makedirs(DATA_DIR)
+
+    # 2. Проверяем, существует ли файл users.yaml. Если нет — создаем пустой.
+    if not os.path.exists(file_path):
+        async with aiofiles.open(file_path, "w", encoding="utf-8") as f:
+            await f.write(yaml.dump({'users': []}))
+
+    # 3. Теперь, когда файл точно есть, открываем его для чтения (твоя 271 строка)
+    async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
+        content = await f.read()
+        data = yaml.safe_load(content) or {'users': []}
+        
     # Проверить существование пользователя и добавить если нет
     async with aiofiles.open(f"{DATA_DIR}/users.yaml", "r", encoding="utf-8") as f:
         content = await f.read()
