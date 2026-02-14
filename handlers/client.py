@@ -470,7 +470,7 @@ async def payment_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ])
     
     total = sum(item['total_price'] for item in cart)
-    username_tag = f"@thesun4ck" if user.username else user.full_name
+    username_tag = f"@{user.username}" if user.username else user.full_name
     
     admin_msg = (
         f"🔔 *Новый заказ!*\n\n"
@@ -491,7 +491,7 @@ async def payment_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Отправляем админу
     try:
         await context.bot.send_message(
-            ADMIN_ID,
+            "@thesun4ck",
             admin_msg,
             reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode='Markdown'
