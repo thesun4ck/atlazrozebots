@@ -32,7 +32,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Каждый букет \\- это произведение искусства\\!\n\n"
         "Выберите действие:",
         reply_markup=get_main_menu(),
-        parse_mode='MarkdownV2'
+        parse_mode='Markdown'
     )
 
 async def catalog(update: Update, context: ContextTypes.DEFAULT_TYPE):
