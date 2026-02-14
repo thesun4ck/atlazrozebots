@@ -32,6 +32,7 @@ class BouquetConstructor(StatesGroup):
 @router.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext):
     # Приветствие и создание записи пользователя
+    print(f"Start command from {message.from_user.id}")
     user = message.from_user
     await ensure_user_exists(user.id, user.username, user.first_name, user.last_name or "")
     
@@ -57,6 +58,7 @@ async def cmd_start(message: Message, state: FSMContext):
 @router.message(F.text == "🌹 Каталог")
 async def show_catalog(message: Message, state: FSMContext):
     # Показать каталог букетов
+    print(f"Catalog requested by {message.from_user.id}")
     bouquets = await get_bouquets()
     if not bouquets:
         await message.answer("Каталог пуст.")
