@@ -6,7 +6,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-ADMIN_NAME, ADMIN_PRICE, ADMIN_PHOTO, ADMIN_POPULAR = range(4)
+ADMIN_NAME, ADMIN_PRICE, ADMIN_PHOTO, ADMIN_POPULAR, CHANGE_PRICE, CHANGE_NAME = range(6)
 
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS:
@@ -98,6 +98,10 @@ async def show_admin_bouquets(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
         
         keyboard = [
+            [
+                InlineKeyboardButton("✏️ Поменять название", callback_data=f"change_name:{bouquet['id']}"),
+                InlineKeyboardButton("💰 Поменять цену", callback_data=f"change_price:{bouquet['id']}")
+            ],
             [InlineKeyboardButton("🗑 Удалить", callback_data=f"delete:{bouquet['id']}")],
             [InlineKeyboardButton(
                 "🔥 Снять популярность" if bouquet.get('is_popular') else "⭐️ Сделать популярным",
@@ -135,6 +139,121 @@ async def toggle_popular(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         await query.answer("✅ Обновлено")
         await query.message.delete()
+
+async def start_change_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Начать изменение цены"""
+    query = update.callback_query
+    await query.answer()
+    
+    bouquet_id = query.data.split(":")[1]
+    bouquet = db.get_bouquet_by_id(bouquet_id)
+    
+    if not bouquet:
+        await query.message.reply_text("❌ Букет не найден")
+        return ConversationHandler.END
+    
+    context.user_data['change_price_bouquet_id'] = bouquet_id
+    
+    await query.message.reply_text(
+        f"*{bouquet['name']}*\n"
+        f"Текущая цена: {bouquet['base_price']}₽\n\n"
+        f"Введите новую цену:",
+        parse_mode='Markdown'
+    )
+    
+    return CHANGE_PRICE
+
+async def price_changed(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Получить новую цену"""
+    try:
+        new_price = int(update.message.text)
+        bouquet_id = context.user_data.get('change_price_bouquet_id')
+        
+        if new_price <= 0:
+            await update.message.reply_text("❌ Цена должна быть больше 0!")
+            return CHANGE_PRICE
+        
+        # Обновляем цену
+        db.update_bouquet(bouquet_id, {'base_price': new_price})
+        
+        bouquet = db.get_bouquet_by_id(bouquet_id)
+        
+        await update.message.reply_text(
+            f"✅ *Цена обновлена!*\n\n"
+            f"🌹 {bouquet['name']}\n"
+            f"💰 Новая цена: {new_price}₽",
+            parse_mode='Markdown'
+        )
+        
+        context.user_data.clear()
+        return ConversationHandler.END
+        
+    except ValueError:
+        await update.message.reply_text(
+            "❌ Ошибка! Введите число.\n"
+            "Попробуйте ещё раз:"
+        )
+        return CHANGE_PRICE
+
+async def cancel_change_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Отмена изменения цены"""
+    context.user_data.clear()
+    await update.message.reply_text("❌ Отменено")
+    return ConversationHandler.END
+
+async def start_change_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Начать изменение названия"""
+    query = update.callback_query
+    await query.answer()
+    
+    bouquet_id = query.data.split(":")[1]
+    bouquet = db.get_bouquet_by_id(bouquet_id)
+    
+    if not bouquet:
+        await query.message.reply_text("❌ Букет не найден")
+        return ConversationHandler.END
+    
+    context.user_data['change_name_bouquet_id'] = bouquet_id
+    
+    await query.message.reply_text(
+        f"*{bouquet['name']}*\n"
+        f"Текущее название: {bouquet['name']}\n\n"
+        f"Введите новое название:",
+        parse_mode='Markdown'
+    )
+    
+    return CHANGE_NAME
+
+async def name_changed(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Получить новое название"""
+    new_name = update.message.text.strip()
+    bouquet_id = context.user_data.get('change_name_bouquet_id')
+    
+    if len(new_name) < 3:
+        await update.message.reply_text("❌ Название слишком короткое! Минимум 3 символа.")
+        return CHANGE_NAME
+    
+    if len(new_name) > 50:
+        await update.message.reply_text("❌ Название слишком длинное! Максимум 50 символов.")
+        return CHANGE_NAME
+    
+    # Обновляем название
+    db.update_bouquet(bouquet_id, {'name': new_name})
+    
+    await update.message.reply_text(
+        f"✅ *Название обновлено!*\n\n"
+        f"🌹 Новое название: {new_name}",
+        parse_mode='Markdown'
+    )
+    
+    context.user_data.clear()
+    return ConversationHandler.END
+
+async def cancel_change_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Отмена изменения названия"""
+    context.user_data.clear()
+    await update.message.reply_text("❌ Отменено")
+    return ConversationHandler.END
 
 async def delete_bouquet_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -294,6 +413,7 @@ def register_handlers(application):
     application.add_handler(CallbackQueryHandler(delete_bouquet_confirmed, pattern="^confirm_delete:"))
     application.add_handler(CallbackQueryHandler(admin_back, pattern="^admin_back$"))
     
+    # ConversationHandler для добавления букета
     add_bouquet_conv = ConversationHandler(
         entry_points=[CallbackQueryHandler(start_add_bouquet, pattern="^admin_add$")],
         states={
@@ -305,4 +425,24 @@ def register_handlers(application):
         fallbacks=[CommandHandler("cancel", cancel_add)]
     )
     
+    # ConversationHandler для изменения цены
+    change_price_conv = ConversationHandler(
+        entry_points=[CallbackQueryHandler(start_change_price, pattern="^change_price:")],
+        states={
+            CHANGE_PRICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, price_changed)]
+        },
+        fallbacks=[CommandHandler("cancel", cancel_change_price)]
+    )
+    
+    # ConversationHandler для изменения названия
+    change_name_conv = ConversationHandler(
+        entry_points=[CallbackQueryHandler(start_change_name, pattern="^change_name:")],
+        states={
+            CHANGE_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, name_changed)]
+        },
+        fallbacks=[CommandHandler("cancel", cancel_change_name)]
+    )
+    
     application.add_handler(add_bouquet_conv)
+    application.add_handler(change_price_conv)
+    application.add_handler(change_name_conv)

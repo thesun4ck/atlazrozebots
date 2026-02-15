@@ -551,7 +551,7 @@ async def show_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
-        "📞 Telegram: @thesun4ck\n"
+        "📞 Telegram: @aliswesh\n"
         "⏰ 12:00 - 21:00\n"
         "🌐 ТГК: https://t.me/satinflowersali"
     )
