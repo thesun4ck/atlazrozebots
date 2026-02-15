@@ -1,7 +1,7 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
 from telegram.ext import ContextTypes, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ConversationHandler
 from database import db
-from config import CONTACT_USERNAME, ADMIN_ID
+from config import CONTACT_USERNAME, ADMIN_IDS
 import logging
 from datetime import datetime, timedelta
 
