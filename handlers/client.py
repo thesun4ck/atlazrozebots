@@ -474,8 +474,7 @@ async def show_cart(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     
     keyboard = [
-        [InlineKeyboardButton("💳 Оплатить", callback_data="checkout")],
-        [InlineKeyboardButton("💬 Связаться", url=f"https://t.me/{CONTACT_USERNAME}")],
+        [InlineKeyboardButton("💬 Связаться об оплате", url=f"https://t.me/{CONTACT_USERNAME}")],
         [InlineKeyboardButton("🗑 Очистить", callback_data="clear_cart")]
     ]
     
@@ -499,119 +498,6 @@ async def clear_cart_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     db.clear_cart(update.effective_user.id)
     await query.message.edit_text("🗑 Корзина очищена")
-
-async def checkout(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    
-    cart = db.get_user_cart(update.effective_user.id)
-    total = sum(item['total_price'] for item in cart)
-    
-    keyboard = [
-        [InlineKeyboardButton("✅ Я оплатил", callback_data="payment_confirm")],
-        [InlineKeyboardButton("❌ Отмена", callback_data="cancel")]
-    ]
-    
-    await query.message.edit_text(
-        f"*💳 Оплата заказа*\n\n"
-        f"Сумма: *{total}₽*\n\n"
-        f"Реквизиты:\n"
-        f"💳 Карта: `2200 7007 1234 5678`\n"
-        f"👤 Flower Shop\n\n"
-        f"После оплаты нажмите кнопку:",
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
-    )
-
-async def payment_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    
-    user = update.effective_user
-    cart = db.get_user_cart(user.id)
-    
-    await query.message.edit_text(
-        "⏳ *Ожидание подтверждения оплаты...*\n\n"
-        "Ваш заказ отправлен менеджеру.",
-        parse_mode='Markdown'
-    )
-    
-    order_id = db.create_order(user.id, user.full_name, cart)
-    
-    items_text = "\n".join([
-        f"🌹 {item['bouquet_name']} ({item['quantity']} шт) - {item['total_price']}₽"
-        for item in cart
-    ])
-    
-    total = sum(item['total_price'] for item in cart)
-    username_tag = f"@{user.username}" if user.username else user.full_name
-    
-    admin_msg = (
-        f"🔔 *Новый заказ!*\n\n"
-        f"Заказ #{order_id}\n"
-        f"От: {username_tag}\n\n"
-        f"{items_text}\n\n"
-        f"💰 *Итого: {total}₽*\n\n"
-        f"Пришло ли поступление?"
-    )
-    
-    keyboard = [
-        [
-            InlineKeyboardButton("✅ Да", callback_data=f"confirm_pay:{order_id}:{user.id}"),
-            InlineKeyboardButton("❌ Нет", callback_data=f"reject_pay:{order_id}:{user.id}")
-        ]
-    ]
-    
-    try:
-        await context.bot.send_message(
-            ADMIN_ID,
-            admin_msg,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='Markdown'
-        )
-        logger.info(f"Admin notification sent for order {order_id}")
-    except Exception as e:
-        logger.error(f"Failed to notify admin: {e}")
-
-async def admin_confirm_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer("Подтверждено")
-    
-    _, order_id, user_id = query.data.split(":")
-    user_id = int(user_id)
-    
-    db.clear_cart(user_id)
-    
-    try:
-        await context.bot.send_message(
-            user_id,
-            f"✅ *Заказ #{order_id} подтвержден!*\n\n"
-            f"Оплата получена. Мы приступили к изготовлению!",
-            parse_mode='Markdown'
-        )
-    except:
-        pass
-    
-    await query.message.edit_text(f"✅ Заказ #{order_id} подтвержден")
-
-async def admin_reject_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer("Отклонено")
-    
-    _, order_id, user_id = query.data.split(":")
-    user_id = int(user_id)
-    
-    try:
-        await context.bot.send_message(
-            user_id,
-            f"❌ *Оплата не подтверждена*\n\n"
-            f"Заказ #{order_id}\n"
-            f"Оплата не поступила. Проверьте реквизиты.",
-            parse_mode='Markdown'
-        )
-    except:
-        pass
-    
-    await query.message.edit_text(f"❌ Заказ #{order_id} отклонен")
 
 async def toggle_fav(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -713,8 +599,4 @@ def register_handlers(application):
     application.add_handler(CallbackQueryHandler(confirm_add_to_cart, pattern="^confirm_cart$"))
     application.add_handler(CallbackQueryHandler(remove_from_cart, pattern="^remove:"))
     application.add_handler(CallbackQueryHandler(clear_cart_handler, pattern="^clear_cart$"))
-    application.add_handler(CallbackQueryHandler(checkout, pattern="^checkout$"))
-    application.add_handler(CallbackQueryHandler(payment_confirm, pattern="^payment_confirm$"))
     application.add_handler(CallbackQueryHandler(toggle_fav, pattern="^fav:"))
-    application.add_handler(CallbackQueryHandler(admin_confirm_payment, pattern="^confirm_pay:"))
-    application.add_handler(CallbackQueryHandler(admin_reject_payment, pattern="^reject_pay:"))

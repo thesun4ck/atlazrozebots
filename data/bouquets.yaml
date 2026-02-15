@@ -1,16 +1,10 @@
 bouquets:
   - id: "b1"
     name: "Синие розы"
-    description: "Роскошный букет из атласных роз глубокого синего цвета"
     base_price: 4500
     image_path: "images/1.jpg"
     is_popular: true
-    colors:
-      - blue
-      - pink
-      - red
-      - white
-      - mix
+    order_count: 0
     quantities:
       - value: 15
         multiplier: 0.6
@@ -33,15 +27,10 @@ bouquets:
 
   - id: "b2"
     name: "Розовая нежность"
-    description: "Нежный букет из розовых атласных роз"
     base_price: 3500
     image_path: "images/2.jpg"
     is_popular: false
-    colors:
-      - pink
-      - red
-      - white
-      - mix
+    order_count: 0
     quantities:
       - value: 15
         multiplier: 0.6
@@ -63,15 +52,115 @@ bouquets:
         price: 500
 
   - id: "b3"
-    name: "Белые облака"
-    description: "Воздушный букет из белоснежных роз"
+    name: "Красная страсть"
     base_price: 4000
     image_path: "images/3.jpg"
     is_popular: true
-    colors:
-      - white
-      - pink
-      - mix
+    order_count: 0
+    quantities:
+      - value: 15
+        multiplier: 0.6
+      - value: 25
+        multiplier: 1.0
+      - value: 51
+        multiplier: 1.8
+      - value: 101
+        multiplier: 3.2
+    packaging:
+      - type: "standard"
+        name: "Стандарт"
+        price: 0
+      - type: "premium"
+        name: "Премиум"
+        price: 300
+      - type: "black"
+        name: "Черная"
+        price: 500
+
+  - id: "b4"
+    name: "Белоснежные мечты"
+    base_price: 4200
+    image_path: "images/4.jpg"
+    is_popular: false
+    order_count: 0
+    quantities:
+      - value: 15
+        multiplier: 0.6
+      - value: 25
+        multiplier: 1.0
+      - value: 51
+        multiplier: 1.8
+      - value: 101
+        multiplier: 3.2
+    packaging:
+      - type: "standard"
+        name: "Стандарт"
+        price: 0
+      - type: "premium"
+        name: "Премиум"
+        price: 300
+      - type: "black"
+        name: "Черная"
+        price: 500
+
+  - id: "b5"
+    name: "Микс букет"
+    base_price: 4800
+    image_path: "images/5.jpg"
+    is_popular: true
+    order_count: 0
+    quantities:
+      - value: 15
+        multiplier: 0.6
+      - value: 25
+        multiplier: 1.0
+      - value: 51
+        multiplier: 1.8
+      - value: 101
+        multiplier: 3.2
+    packaging:
+      - type: "standard"
+        name: "Стандарт"
+        price: 0
+      - type: "premium"
+        name: "Премиум"
+        price: 300
+      - type: "black"
+        name: "Черная"
+        price: 500
+
+  - id: "b6"
+    name: "Нежность"
+    base_price: 3800
+    image_path: "images/6.jpg"
+    is_popular: false
+    order_count: 0
+    quantities:
+      - value: 15
+        multiplier: 0.6
+      - value: 25
+        multiplier: 1.0
+      - value: 51
+        multiplier: 1.8
+      - value: 101
+        multiplier: 3.2
+    packaging:
+      - type: "standard"
+        name: "Стандарт"
+        price: 0
+      - type: "premium"
+        name: "Премиум"
+        price: 300
+      - type: "black"
+        name: "Черная"
+        price: 500
+
+  - id: "b7"
+    name: "Элегантность"
+    base_price: 5000
+    image_path: "images/7.jpg"
+    is_popular: true
+    order_count: 0
     quantities:
       - value: 15
         multiplier: 0.6
