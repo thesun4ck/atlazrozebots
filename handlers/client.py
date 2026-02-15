@@ -25,8 +25,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     db.save_user(user.id, user.username, user.first_name, user.last_name or "")
     
     await update.message.reply_text(
-        "🌹 *Добро пожаловать в Flower Shop!*\n\n"
-        "Мы создаем уникальные букеты из атласных роз ручной работы.\n\n"
+        "🌹 *Добро пожаловать в Satin flowers!*\n\n"
+        "Привет,я Алиса и занимаюсь изготовлением разных букетов.\n\n"
         "Выберите действие:",
         reply_markup=get_main_menu(),
         parse_mode='Markdown'
