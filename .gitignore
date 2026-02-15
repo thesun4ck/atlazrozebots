@@ -1,17 +1,7 @@
-# Environment
 .env
 __pycache__/
 *.pyc
-
-# Data files with personal info
 data/carts.yaml
 data/orders.yaml
 data/users.yaml
 data/favorites.yaml
-
-# IDE
-.vscode/
-.idea/
-
-# OS
-.DS_Store
