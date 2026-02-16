@@ -47,8 +47,7 @@ async def catalog(update: Update, context: ContextTypes.DEFAULT_TYPE):
         is_fav = bouquet['id'] in favorites
         caption = (
             f"{'🔥 ' if bouquet.get('is_popular') else ''}"
-            f"*{bouquet['name']}*\n\n"
-            f"💰 Цена от: *{bouquet['base_price']}₽*"
+            f"*{bouquet['name']}*"
         )
         
         keyboard = [

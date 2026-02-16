@@ -6,7 +6,8 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-ADMIN_NAME, ADMIN_PRICE, ADMIN_PHOTO, ADMIN_POPULAR, CHANGE_PRICE, CHANGE_NAME = range(6)
+ADMIN_NAME, ADMIN_PRICE, ADMIN_PHOTO, ADMIN_POPULAR, CHANGE_NAME = range(5)
+CHANGE_PRICE_21, CHANGE_PRICE_51, CHANGE_PRICE_71, CHANGE_PRICE_101 = range(5, 9)
 
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS:
@@ -141,7 +142,7 @@ async def toggle_popular(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.delete()
 
 async def start_change_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Начать изменение цены"""
+    """Начать изменение цены - шаг 1: 21 роза"""
     query = update.callback_query
     await query.answer()
     
@@ -153,51 +154,201 @@ async def start_change_price(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return ConversationHandler.END
     
     context.user_data['change_price_bouquet_id'] = bouquet_id
+    context.user_data['new_prices'] = {}
+    
+    # Текущая цена за 21 розу
+    current_price_21 = int(bouquet['base_price'] * bouquet['quantities'][0]['multiplier'])
+    context.user_data['current_prices'] = {
+        21: current_price_21,
+        51: int(bouquet['base_price'] * bouquet['quantities'][1]['multiplier']),
+        71: int(bouquet['base_price'] * bouquet['quantities'][2]['multiplier']),
+        101: int(bouquet['base_price'] * bouquet['quantities'][3]['multiplier'])
+    }
+    
+    keyboard = [[InlineKeyboardButton("⏭ Пропустить", callback_data="skip_21")]]
     
     await query.message.reply_text(
-        f"*{bouquet['name']}*\n"
-        f"Текущая цена: {bouquet['base_price']}₽\n\n"
-        f"Введите новую цену:",
+        f"*{bouquet['name']}*\n\n"
+        f"Сейчас цена за 21 розу - {current_price_21}₽\n"
+        f"На какую сумму хотите поменять?",
+        reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode='Markdown'
     )
     
-    return CHANGE_PRICE
+    return CHANGE_PRICE_21
 
-async def price_changed(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Получить новую цену"""
+async def change_price_21(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Получить цену за 21 розу"""
+    if update.callback_query:
+        # Пропустить
+        await update.callback_query.answer()
+        return await ask_price_51(update.callback_query.message, context)
+    
     try:
         new_price = int(update.message.text)
-        bouquet_id = context.user_data.get('change_price_bouquet_id')
-        
         if new_price <= 0:
             await update.message.reply_text("❌ Цена должна быть больше 0!")
-            return CHANGE_PRICE
+            return CHANGE_PRICE_21
         
-        # Обновляем цену
-        db.update_bouquet(bouquet_id, {'base_price': new_price})
-        
-        bouquet = db.get_bouquet_by_id(bouquet_id)
-        
-        await update.message.reply_text(
-            f"✅ *Цена обновлена!*\n\n"
-            f"🌹 {bouquet['name']}\n"
-            f"💰 Новая цена: {new_price}₽",
-            parse_mode='Markdown'
-        )
-        
-        context.user_data.clear()
-        return ConversationHandler.END
+        context.user_data['new_prices'][21] = new_price
+        return await ask_price_51(update.message, context)
         
     except ValueError:
-        await update.message.reply_text(
-            "❌ Ошибка! Введите число.\n"
-            "Попробуйте ещё раз:"
-        )
-        return CHANGE_PRICE
+        await update.message.reply_text("❌ Введите число!")
+        return CHANGE_PRICE_21
+
+async def ask_price_51(message, context):
+    """Спросить цену за 51 розу"""
+    current_price = context.user_data['current_prices'][51]
+    keyboard = [[InlineKeyboardButton("⏭ Пропустить", callback_data="skip_51")]]
+    
+    await message.reply_text(
+        f"Сейчас цена за 51 розу - {current_price}₽\n"
+        f"На какую сумму хотите поменять?",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    
+    return CHANGE_PRICE_51
+
+async def change_price_51(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Получить цену за 51 розу"""
+    if update.callback_query:
+        # Пропустить
+        await update.callback_query.answer()
+        return await ask_price_71(update.callback_query.message, context)
+    
+    try:
+        new_price = int(update.message.text)
+        if new_price <= 0:
+            await update.message.reply_text("❌ Цена должна быть больше 0!")
+            return CHANGE_PRICE_51
+        
+        context.user_data['new_prices'][51] = new_price
+        return await ask_price_71(update.message, context)
+        
+    except ValueError:
+        await update.message.reply_text("❌ Введите число!")
+        return CHANGE_PRICE_51
+
+async def ask_price_71(message, context):
+    """Спросить цену за 71 розу"""
+    current_price = context.user_data['current_prices'][71]
+    keyboard = [[InlineKeyboardButton("⏭ Пропустить", callback_data="skip_71")]]
+    
+    await message.reply_text(
+        f"Сейчас цена за 71 розу - {current_price}₽\n"
+        f"На какую сумму хотите поменять?",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    
+    return CHANGE_PRICE_71
+
+async def change_price_71(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Получить цену за 71 розу"""
+    if update.callback_query:
+        # Пропустить
+        await update.callback_query.answer()
+        return await ask_price_101(update.callback_query.message, context)
+    
+    try:
+        new_price = int(update.message.text)
+        if new_price <= 0:
+            await update.message.reply_text("❌ Цена должна быть больше 0!")
+            return CHANGE_PRICE_71
+        
+        context.user_data['new_prices'][71] = new_price
+        return await ask_price_101(update.message, context)
+        
+    except ValueError:
+        await update.message.reply_text("❌ Введите число!")
+        return CHANGE_PRICE_71
+
+async def ask_price_101(message, context):
+    """Спросить цену за 101 розу"""
+    current_price = context.user_data['current_prices'][101]
+    keyboard = [[InlineKeyboardButton("⏭ Пропустить", callback_data="skip_101")]]
+    
+    await message.reply_text(
+        f"Сейчас цена за 101 розу - {current_price}₽\n"
+        f"На какую сумму хотите поменять?",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    
+    return CHANGE_PRICE_101
+
+async def change_price_101(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Получить цену за 101 розу и сохранить все изменения"""
+    if update.callback_query:
+        # Пропустить
+        await update.callback_query.answer()
+        message = update.callback_query.message
+    else:
+        try:
+            new_price = int(update.message.text)
+            if new_price <= 0:
+                await update.message.reply_text("❌ Цена должна быть больше 0!")
+                return CHANGE_PRICE_101
+            
+            context.user_data['new_prices'][101] = new_price
+            message = update.message
+            
+        except ValueError:
+            await update.message.reply_text("❌ Введите число!")
+            return CHANGE_PRICE_101
+    
+    # Сохраняем изменения
+    bouquet_id = context.user_data['change_price_bouquet_id']
+    bouquet = db.get_bouquet_by_id(bouquet_id)
+    new_prices = context.user_data['new_prices']
+    current_prices = context.user_data['current_prices']
+    
+    # Если НИ ОДНОЙ цены не изменили - отменяем
+    if not new_prices:
+        await message.reply_text("❌ Цены не изменены")
+        context.user_data.clear()
+        return ConversationHandler.END
+    
+    # Берём за базу цену 101 розы (если не изменили - оставляем старую)
+    base_price = new_prices.get(101, current_prices[101])
+    
+    # Пересчитываем множители
+    final_prices = {
+        21: new_prices.get(21, current_prices[21]),
+        51: new_prices.get(51, current_prices[51]),
+        71: new_prices.get(71, current_prices[71]),
+        101: base_price
+    }
+    
+    # Обновляем quantities с новыми множителями
+    new_quantities = [
+        {"value": 21, "multiplier": round(final_prices[21] / base_price, 3)},
+        {"value": 51, "multiplier": round(final_prices[51] / base_price, 3)},
+        {"value": 71, "multiplier": round(final_prices[71] / base_price, 3)},
+        {"value": 101, "multiplier": 1.0}
+    ]
+    
+    db.update_bouquet(bouquet_id, {
+        'base_price': base_price,
+        'quantities': new_quantities
+    })
+    
+    # Формируем итоговое сообщение
+    result_text = f"✅ *Цены обновлены!*\n\n🌹 {bouquet['name']}\n\n"
+    result_text += f"21 роза: {final_prices[21]}₽\n"
+    result_text += f"51 роза: {final_prices[51]}₽\n"
+    result_text += f"71 роза: {final_prices[71]}₽\n"
+    result_text += f"101 роза: {final_prices[101]}₽"
+    
+    await message.reply_text(result_text, parse_mode='Markdown')
+    
+    context.user_data.clear()
+    return ConversationHandler.END
 
 async def cancel_change_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Отмена изменения цены"""
     context.user_data.clear()
+    await update.message.reply_text("❌ Отменено")
+    return ConversationHandler.END
     await update.message.reply_text("❌ Отменено")
     return ConversationHandler.END
 
@@ -429,7 +580,22 @@ def register_handlers(application):
     change_price_conv = ConversationHandler(
         entry_points=[CallbackQueryHandler(start_change_price, pattern="^change_price:")],
         states={
-            CHANGE_PRICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, price_changed)]
+            CHANGE_PRICE_21: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, change_price_21),
+                CallbackQueryHandler(change_price_21, pattern="^skip_21$")
+            ],
+            CHANGE_PRICE_51: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, change_price_51),
+                CallbackQueryHandler(change_price_51, pattern="^skip_51$")
+            ],
+            CHANGE_PRICE_71: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, change_price_71),
+                CallbackQueryHandler(change_price_71, pattern="^skip_71$")
+            ],
+            CHANGE_PRICE_101: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, change_price_101),
+                CallbackQueryHandler(change_price_101, pattern="^skip_101$")
+            ]
         },
         fallbacks=[CommandHandler("cancel", cancel_change_price)]
     )
