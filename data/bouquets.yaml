@@ -6,14 +6,14 @@ bouquets:
     is_popular: true
     order_count: 0
     quantities:
-      - value: 15
-        multiplier: 0.6
-      - value: 25
-        multiplier: 1.0
+      - value: 21
+        multiplier: 0.244
       - value: 51
-        multiplier: 1.8
+        multiplier: 0.511
+      - value: 71
+        multiplier: 0.711
       - value: 101
-        multiplier: 3.2
+        multiplier: 1.0
     packaging:
       - type: "standard"
         name: "Стандарт"
@@ -32,14 +32,14 @@ bouquets:
     is_popular: false
     order_count: 0
     quantities:
-      - value: 15
-        multiplier: 0.6
-      - value: 25
-        multiplier: 1.0
+      - value: 21
+        multiplier: 0.314
       - value: 51
-        multiplier: 1.8
+        multiplier: 0.657
+      - value: 71
+        multiplier: 0.914
       - value: 101
-        multiplier: 3.2
+        multiplier: 1.0
     packaging:
       - type: "standard"
         name: "Стандарт"
@@ -58,14 +58,14 @@ bouquets:
     is_popular: true
     order_count: 0
     quantities:
-      - value: 15
-        multiplier: 0.6
-      - value: 25
-        multiplier: 1.0
+      - value: 21
+        multiplier: 0.275
       - value: 51
-        multiplier: 1.8
+        multiplier: 0.575
+      - value: 71
+        multiplier: 0.8
       - value: 101
-        multiplier: 3.2
+        multiplier: 1.0
     packaging:
       - type: "standard"
         name: "Стандарт"
@@ -84,14 +84,14 @@ bouquets:
     is_popular: false
     order_count: 0
     quantities:
-      - value: 15
-        multiplier: 0.6
-      - value: 25
-        multiplier: 1.0
+      - value: 21
+        multiplier: 0.262
       - value: 51
-        multiplier: 1.8
+        multiplier: 0.548
+      - value: 71
+        multiplier: 0.762
       - value: 101
-        multiplier: 3.2
+        multiplier: 1.0
     packaging:
       - type: "standard"
         name: "Стандарт"
@@ -110,14 +110,14 @@ bouquets:
     is_popular: true
     order_count: 0
     quantities:
-      - value: 15
-        multiplier: 0.6
-      - value: 25
-        multiplier: 1.0
+      - value: 21
+        multiplier: 0.229
       - value: 51
-        multiplier: 1.8
+        multiplier: 0.479
+      - value: 71
+        multiplier: 0.667
       - value: 101
-        multiplier: 3.2
+        multiplier: 1.0
     packaging:
       - type: "standard"
         name: "Стандарт"
@@ -136,14 +136,14 @@ bouquets:
     is_popular: false
     order_count: 0
     quantities:
-      - value: 15
-        multiplier: 0.6
-      - value: 25
-        multiplier: 1.0
+      - value: 21
+        multiplier: 0.289
       - value: 51
-        multiplier: 1.8
+        multiplier: 0.605
+      - value: 71
+        multiplier: 0.842
       - value: 101
-        multiplier: 3.2
+        multiplier: 1.0
     packaging:
       - type: "standard"
         name: "Стандарт"
@@ -162,14 +162,14 @@ bouquets:
     is_popular: true
     order_count: 0
     quantities:
-      - value: 15
-        multiplier: 0.6
-      - value: 25
-        multiplier: 1.0
+      - value: 21
+        multiplier: 0.22
       - value: 51
-        multiplier: 1.8
+        multiplier: 0.46
+      - value: 71
+        multiplier: 0.64
       - value: 101
-        multiplier: 3.2
+        multiplier: 1.0
     packaging:
       - type: "standard"
         name: "Стандарт"
