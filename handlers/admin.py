@@ -156,20 +156,19 @@ async def start_change_price(update: Update, context: ContextTypes.DEFAULT_TYPE)
     context.user_data['change_price_bouquet_id'] = bouquet_id
     context.user_data['new_prices'] = {}
     
-    # Текущая цена за 21 розу
-    current_price_21 = int(bouquet['base_price'] * bouquet['quantities'][0]['multiplier'])
+    # Фиксированные текущие цены
     context.user_data['current_prices'] = {
-        21: current_price_21,
-        51: int(bouquet['base_price'] * bouquet['quantities'][1]['multiplier']),
-        71: int(bouquet['base_price'] * bouquet['quantities'][2]['multiplier']),
-        101: int(bouquet['base_price'] * bouquet['quantities'][3]['multiplier'])
+        21: 1100,
+        51: 2300,
+        71: 3200,
+        101: 4500
     }
     
     keyboard = [[InlineKeyboardButton("⏭ Пропустить", callback_data="skip_21")]]
     
     await query.message.reply_text(
         f"*{bouquet['name']}*\n\n"
-        f"Сейчас цена за 21 розу - {current_price_21}₽\n"
+        f"Сейчас цена за 21 розу - 1100₽\n"
         f"На какую сумму хотите поменять?",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode='Markdown'
