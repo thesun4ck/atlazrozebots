@@ -157,17 +157,17 @@ bouquets:
 
   - id: "b7"
     name: "Элегантность"
-    base_price: 5000
+    base_price: 4500
     image_path: "images/7.jpg"
     is_popular: true
     order_count: 0
     quantities:
       - value: 21
-        multiplier: 0.22
+        multiplier: 0.244
       - value: 51
-        multiplier: 0.46
+        multiplier: 0.511
       - value: 71
-        multiplier: 0.64
+        multiplier: 0.711
       - value: 101
         multiplier: 1.0
     packaging:
