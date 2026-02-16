@@ -85,8 +85,18 @@ async def start_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = []
     for qty in bouquet.get('quantities', []):
         val = qty['value']
-        mult = qty['multiplier']
-        price = int(bouquet['base_price'] * mult)
+        # Фиксированные цены
+        if val == 21:
+            price = 1100
+        elif val == 51:
+            price = 2300
+        elif val == 71:
+            price = 3200
+        elif val == 101:
+            price = 4500
+        else:
+            price = int(bouquet['base_price'] * qty['multiplier'])
+        
         keyboard.append([InlineKeyboardButton(
             f"{val} роз - {price}₽",
             callback_data=f"qty:{val}:{price}"
