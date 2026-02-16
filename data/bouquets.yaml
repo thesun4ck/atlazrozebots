@@ -27,17 +27,17 @@ bouquets:
 
   - id: "b2"
     name: "Розовая нежность"
-    base_price: 3500
+    base_price: 4500
     image_path: "images/2.jpg"
     is_popular: false
     order_count: 0
     quantities:
       - value: 21
-        multiplier: 0.314
+        multiplier: 0.244
       - value: 51
-        multiplier: 0.657
+        multiplier: 0.511
       - value: 71
-        multiplier: 0.914
+        multiplier: 0.711
       - value: 101
         multiplier: 1.0
     packaging:
@@ -53,17 +53,17 @@ bouquets:
 
   - id: "b3"
     name: "Красная страсть"
-    base_price: 4000
+    base_price: 4500
     image_path: "images/3.jpg"
     is_popular: true
     order_count: 0
     quantities:
       - value: 21
-        multiplier: 0.275
+        multiplier: 0.244
       - value: 51
-        multiplier: 0.575
+        multiplier: 0.511
       - value: 71
-        multiplier: 0.8
+        multiplier: 0.711
       - value: 101
         multiplier: 1.0
     packaging:
@@ -79,17 +79,17 @@ bouquets:
 
   - id: "b4"
     name: "Белоснежные мечты"
-    base_price: 4200
+    base_price: 4500
     image_path: "images/4.jpg"
     is_popular: false
     order_count: 0
     quantities:
       - value: 21
-        multiplier: 0.262
+        multiplier: 0.244
       - value: 51
-        multiplier: 0.548
+        multiplier: 0.511
       - value: 71
-        multiplier: 0.762
+        multiplier: 0.711
       - value: 101
         multiplier: 1.0
     packaging:
@@ -105,17 +105,17 @@ bouquets:
 
   - id: "b5"
     name: "Микс букет"
-    base_price: 4800
+    base_price: 4500
     image_path: "images/5.jpg"
     is_popular: true
     order_count: 0
     quantities:
       - value: 21
-        multiplier: 0.229
+        multiplier: 0.244
       - value: 51
-        multiplier: 0.479
+        multiplier: 0.511
       - value: 71
-        multiplier: 0.667
+        multiplier: 0.711
       - value: 101
         multiplier: 1.0
     packaging:
@@ -131,17 +131,17 @@ bouquets:
 
   - id: "b6"
     name: "Нежность"
-    base_price: 3800
+    base_price: 4500
     image_path: "images/6.jpg"
     is_popular: false
     order_count: 0
     quantities:
       - value: 21
-        multiplier: 0.289
+        multiplier: 0.244
       - value: 51
-        multiplier: 0.605
+        multiplier: 0.511
       - value: 71
-        multiplier: 0.842
+        multiplier: 0.711
       - value: 101
         multiplier: 1.0
     packaging:
