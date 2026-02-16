@@ -7,11 +7,11 @@ bouquets:
     order_count: 0
     quantities:
       - value: 21
-        multiplier: 0.244
+        multiplier: 0.244444444
       - value: 51
-        multiplier: 0.511
+        multiplier: 0.511111111
       - value: 71
-        multiplier: 0.711
+        multiplier: 0.711111111
       - value: 101
         multiplier: 1.0
     packaging:
@@ -33,11 +33,11 @@ bouquets:
     order_count: 0
     quantities:
       - value: 21
-        multiplier: 0.244
+        multiplier: 0.244444444
       - value: 51
-        multiplier: 0.511
+        multiplier: 0.511111111
       - value: 71
-        multiplier: 0.711
+        multiplier: 0.711111111
       - value: 101
         multiplier: 1.0
     packaging:
@@ -59,11 +59,11 @@ bouquets:
     order_count: 0
     quantities:
       - value: 21
-        multiplier: 0.244
+        multiplier: 0.244444444
       - value: 51
-        multiplier: 0.511
+        multiplier: 0.511111111
       - value: 71
-        multiplier: 0.711
+        multiplier: 0.711111111
       - value: 101
         multiplier: 1.0
     packaging:
@@ -85,11 +85,11 @@ bouquets:
     order_count: 0
     quantities:
       - value: 21
-        multiplier: 0.244
+        multiplier: 0.244444444
       - value: 51
-        multiplier: 0.511
+        multiplier: 0.511111111
       - value: 71
-        multiplier: 0.711
+        multiplier: 0.711111111
       - value: 101
         multiplier: 1.0
     packaging:
@@ -111,11 +111,11 @@ bouquets:
     order_count: 0
     quantities:
       - value: 21
-        multiplier: 0.244
+        multiplier: 0.244444444
       - value: 51
-        multiplier: 0.511
+        multiplier: 0.511111111
       - value: 71
-        multiplier: 0.711
+        multiplier: 0.711111111
       - value: 101
         multiplier: 1.0
     packaging:
@@ -137,11 +137,11 @@ bouquets:
     order_count: 0
     quantities:
       - value: 21
-        multiplier: 0.244
+        multiplier: 0.244444444
       - value: 51
-        multiplier: 0.511
+        multiplier: 0.511111111
       - value: 71
-        multiplier: 0.711
+        multiplier: 0.711111111
       - value: 101
         multiplier: 1.0
     packaging:
@@ -163,11 +163,11 @@ bouquets:
     order_count: 0
     quantities:
       - value: 21
-        multiplier: 0.244
+        multiplier: 0.244444444
       - value: 51
-        multiplier: 0.511
+        multiplier: 0.511111111
       - value: 71
-        multiplier: 0.711
+        multiplier: 0.711111111
       - value: 101
         multiplier: 1.0
     packaging:
